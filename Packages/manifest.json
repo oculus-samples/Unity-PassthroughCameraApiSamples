@@ -5,7 +5,7 @@
     "com.unity.sentis": "2.1.1",
     "com.unity.ugui": "1.0.0",
     "com.unity.xr.management": "4.5.0",
-    "com.unity.xr.oculus": "4.5.0",
+    "com.unity.xr.openxr": "1.14.3",
     "com.unity.modules.ai": "1.0.0",
     "com.unity.modules.androidjni": "1.0.0",
     "com.unity.modules.animation": "1.0.0",
