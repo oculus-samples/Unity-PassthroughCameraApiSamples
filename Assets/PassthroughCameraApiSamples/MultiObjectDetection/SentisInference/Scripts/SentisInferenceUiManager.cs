@@ -159,7 +159,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                         else
                         {
                             // Same overlapping class - remove the existing box
-                            DetectionManager.LogIfDebug("Remove same class duplicate");
                             ReturnToPool(box);
                             m_boxDrawn.RemoveAt(i);
                         }

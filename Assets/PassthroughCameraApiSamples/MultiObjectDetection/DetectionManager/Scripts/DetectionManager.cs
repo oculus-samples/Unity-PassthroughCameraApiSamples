@@ -44,17 +44,8 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             OVRManager.TrackingAcquired -= OnTrackingAcquired;
         }
 
-        private void OnTrackingLost()
-        {
-            m_isHeadsetTracking = false;
-            LogIfDebug($"{nameof(m_isHeadsetTracking)}: {m_isHeadsetTracking}");
-        }
-
-        private void OnTrackingAcquired()
-        {
-            m_isHeadsetTracking = true;
-            LogIfDebug($"{nameof(m_isHeadsetTracking)}: {m_isHeadsetTracking}");
-        }
+        private void OnTrackingLost() => m_isHeadsetTracking = false;
+        private void OnTrackingAcquired() => m_isHeadsetTracking = true;
 
         private void Update()
         {
@@ -130,11 +121,11 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                 var saveAnchorResult = awaiter.GetResult();
                 if (!saveAnchorResult.Success)
                 {
-                    LogIfDebug($"SaveAnchorAsync() failed {saveAnchorResult}", LogType.Error);
+                    LogSpatialAnchor($"SaveAnchorAsync() failed {saveAnchorResult}", LogType.Error);
                     EraseSpatialAnchor();
                     yield break;
                 }
-                LogIfDebug("Spatial Anchor created.");
+                LogSpatialAnchor("created");
             }
 
             IEnumerator RestoreSpatialAnchorTracking()
@@ -148,7 +139,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                         yield break;
                     }
 
-                    LogIfDebug("Spatial anchor tracking was lost, restoring...");
+                    LogSpatialAnchor("tracking was lost, restoring...");
                     var unboundAnchors = new List<OVRSpatialAnchor.UnboundAnchor>(1);
                     var awaiter = OVRSpatialAnchor.LoadUnboundAnchorsAsync(new[]
                     {
@@ -161,27 +152,27 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                     var loadResult = awaiter.GetResult();
                     if (!loadResult.Success)
                     {
-                        LogIfDebug($"LoadUnboundAnchorsAsync() failed {loadResult.Status}.", LogType.Error);
+                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() failed {loadResult.Status}", LogType.Error);
                         EraseSpatialAnchor();
                         yield break;
                     }
                     if (unboundAnchors.Count != 0)
                     {
-                        LogIfDebug($"LoadUnboundAnchorsAsync() unexpected count:{unboundAnchors.Count}.", LogType.Error);
+                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() unexpected count:{unboundAnchors.Count}", LogType.Error);
                         EraseSpatialAnchor();
                         yield break;
                     }
                     yield return null;
                     if (m_spatialAnchor.IsTracked)
                     {
-                        LogIfDebug("Spatial Anchor tracking was restored successfully.");
+                        LogSpatialAnchor("tracking was restored successfully");
                         yield break;
                     }
 
                     yield return new WaitForSeconds(1f);
                 }
 
-                LogIfDebug("Spatial Anchor tracking restoration failed.", LogType.Warning);
+                LogSpatialAnchor("tracking restoration failed", LogType.Warning);
                 EraseSpatialAnchor();
             }
         }
@@ -190,12 +181,11 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         {
             if (m_spatialAnchor != null)
             {
-                LogIfDebug("EraseSpatialAnchor");
+                LogSpatialAnchor("EraseSpatialAnchor");
                 m_spatialAnchor.EraseAnchorAsync();
                 DestroyImmediate(m_spatialAnchor);
                 m_spatialAnchor = null;
 
-                LogIfDebug("Clean markers and bounding boxes");
                 CleanMarkers();
                 m_uiInference.ClearAnnotations();
             }
@@ -211,10 +201,9 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             OnObjectsIdentified?.Invoke(-1);
         }
 
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
-        internal static void LogIfDebug(string message, LogType logType = LogType.Log)
+        private static void LogSpatialAnchor(string message, LogType logType = LogType.Log)
         {
-            Debug.unityLogger.Log(logType, $"DetectionManager: {message}");
+            Debug.unityLogger.Log(logType, $"{nameof(OVRSpatialAnchor)}: {message}");
         }
 
         /// <summary>
