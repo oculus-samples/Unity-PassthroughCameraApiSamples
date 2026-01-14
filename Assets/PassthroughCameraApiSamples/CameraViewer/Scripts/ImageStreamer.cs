@@ -282,6 +282,13 @@ public class ImageStreamer : MonoBehaviour
                         {
                             try
                             {
+                                if (completeMessage == "HANDSHAKE_OK")
+                                {
+                                    handshakeCompleted = true;
+                                    Debug.Log("Handshake with server completed.");
+                                    continue;
+                                }
+
                                 // 3. Deserialize the single, complete message (SAFE in background thread)
                                 CornerData tag = JsonConvert.DeserializeObject<CornerData>(completeMessage);
 
