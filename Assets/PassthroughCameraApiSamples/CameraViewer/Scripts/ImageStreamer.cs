@@ -49,7 +49,7 @@ public class ImageStreamer : MonoBehaviour
     [SerializeField] private LayerMask environmentMask;
 
     [Header("Tuning Sensitivity")]
-    public float sensitivity = 0.5f;
+    public float sensitivity = 0.1f;
 
     // One euro filter parameters
     private float minCutoffPosition = 0.70f;
@@ -62,6 +62,8 @@ public class ImageStreamer : MonoBehaviour
     OneEuroQuaternion rotationFilter;
 
     private bool handshakeCompleted = false;
+
+    private Vector3 adjustmentOffset = new Vector3(0.0f, 0.0f, 0.0f);
 
     public class CornerData
     {
@@ -112,26 +114,50 @@ public class ImageStreamer : MonoBehaviour
         }
     }
 
+    public float targetFPS = 30f; // Send 15 images per second instead of 72/90
+    private float m_lastSendTime = 0f;
+    private Texture2D m_cpuTexture;
+    private RenderTexture m_smallDescriptor;
+    private int targetWidth = 640;
+    private int targetHeight = 640;
+
     private void Update()
     {
         if (handshakeCompleted && m_cameraAccess.IsPlaying)
         {
-            //// Color32[] pixels = new Color32[m_cameraAccess.CurrentResolution.x * m_cameraAccess.CurrentResolution.y];
-            //Color32[] pixels = ((Texture2D)m_cameraAccess.GetTexture()).GetPixels32();
+            Texture rawTexture = m_cameraAccess.GetTexture();
+            if (rawTexture == null) return;
 
-            //int dataLength = pixels.Length * 4;
-            //byte[] byteData = MemoryMarshal.Cast<Color32, byte>(pixels).ToArray();
+            // 1. Initialize the small GPU buffer (RenderTexture)
+            if (m_smallDescriptor == null)
+            {
+                m_smallDescriptor = new RenderTexture(targetWidth, targetHeight, 0);
+            }
 
-            var texture = (Texture2D)m_cameraAccess.GetTexture();
+            // 2. Initialize the CPU buffer (Texture2D) to match the small size
+            if (m_cpuTexture == null || m_cpuTexture.width != targetWidth)
+            {
+                m_cpuTexture = new Texture2D(targetWidth, targetHeight, TextureFormat.RGBA32, false);
+            }
 
-            //byte[] byteData = texture.GetRawTextureData();
-            byte[] byteData = texture.EncodeToJPG(60); // Compress to JPEG to prep for send
+            // 3. Downscale on the GPU
+            // This takes the 1280x1280 and shrinks it to 640x640 instantly
+            Graphics.Blit(rawTexture, m_smallDescriptor);
 
+            // 4. Download the SMALLER image to the CPU
+            RenderTexture currentRT = RenderTexture.active;
+            RenderTexture.active = m_smallDescriptor;
+
+            m_cpuTexture.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
+            m_cpuTexture.Apply();
+
+            RenderTexture.active = currentRT;
+
+            // 5. Encode the much smaller dataset
+            byte[] byteData = m_cpuTexture.EncodeToJPG(60);
             SendMessageToServer(byteData);
         }
 
-        // Debug send test message
-        //SendMessageToServer();
         HandleControllerTuning();
     }
 
@@ -141,34 +167,41 @@ public class ImageStreamer : MonoBehaviour
         Vector2 rightStick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.RTouch);
         if (rightStick.magnitude > 0.1f)
         {
-            minCutoffPosition += rightStick.y * sensitivity * Time.deltaTime;
-            betaPosition += rightStick.x * sensitivity * Time.deltaTime;
+            //minCutoffPosition += rightStick.y * sensitivity * Time.deltaTime;
+            //betaPosition += rightStick.x * sensitivity * Time.deltaTime;
 
-            // Clamping to prevent negative values
-            minCutoffPosition = Mathf.Max(0.01f, minCutoffPosition);
-            betaPosition = Mathf.Max(0.0f, betaPosition);
+            //// Clamping to prevent negative values
+            //minCutoffPosition = Mathf.Max(0.01f, minCutoffPosition);
+            //betaPosition = Mathf.Max(0.0f, betaPosition);
 
-            positionFilter.UpdateParams(minCutoffPosition, betaPosition);
-            Debug.Log($"POS TUNING: MinCutoff: {minCutoffPosition:F3} | Beta: {betaPosition:F3}");
+            //positionFilter.UpdateParams(minCutoffPosition, betaPosition);
+            //Debug.Log($"POS TUNING: MinCutoff: {minCutoffPosition:F3} | Beta: {betaPosition:F3}");
+
+            adjustmentOffset.y += rightStick.y * sensitivity * Time.deltaTime;
+            adjustmentOffset.z += rightStick.x * sensitivity * Time.deltaTime;
         }
 
         // 2. Read Left Thumbstick (Rotation Tuning)
         Vector2 leftStick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.LTouch);
         if (leftStick.magnitude > 0.1f)
         {
-            minCutoffRotation += leftStick.y * sensitivity * Time.deltaTime;
-            betaRotation += leftStick.x * sensitivity * Time.deltaTime;
+            //minCutoffRotation += leftStick.y * sensitivity * Time.deltaTime;
+            //betaRotation += leftStick.x * sensitivity * Time.deltaTime;
 
-            minCutoffRotation = Mathf.Max(0.01f, minCutoffRotation);
-            betaRotation = Mathf.Max(0.0f, betaRotation);
+            //minCutoffRotation = Mathf.Max(0.01f, minCutoffRotation);
+            //betaRotation = Mathf.Max(0.0f, betaRotation);
 
-            rotationFilter.UpdateParams(minCutoffRotation, betaRotation);
-            Debug.Log($"ROT TUNING: MinCutoff: {minCutoffRotation:F3} | Beta: {betaRotation:F3}");
+            //rotationFilter.UpdateParams(minCutoffRotation, betaRotation);
+            //Debug.Log($"ROT TUNING: MinCutoff: {minCutoffRotation:F3} | Beta: {betaRotation:F3}");
+
+            adjustmentOffset.x += leftStick.x * sensitivity * Time.deltaTime;
         }
 
-        debugText.text = "POS mincutoff: " + minCutoffPosition.ToString("F2") + "  |  " + "POS beta: " + betaPosition.ToString("F2")
-                            + "\n" +
-                         "ROT mincutoff: " + minCutoffRotation.ToString("F2") + "  |  " + "ROT beta: " + betaRotation.ToString("F2");
+        //debugText.text = "POS mincutoff: " + minCutoffPosition.ToString("F2") + "  |  " + "POS beta: " + betaPosition.ToString("F2")
+        //                    + "\n" +
+        //                 "ROT mincutoff: " + minCutoffRotation.ToString("F2") + "  |  " + "ROT beta: " + betaRotation.ToString("F2");
+
+        debugText.text = "X offset: " + adjustmentOffset.x.ToString("F2") + "  |  " + "Y offset: " + adjustmentOffset.y.ToString("F2") + "  |  " + "Z offset: " + adjustmentOffset.z.ToString("F2");
     }
 
     private void ConnectToServer()
@@ -230,7 +263,9 @@ public class ImageStreamer : MonoBehaviour
             // 2. Transform relative to Camera
             Transform camTrans = centerEyeCamera;
 
-            Vector3 worldPos = camTrans.TransformPoint(localPos);
+            Vector3 hardwareOffset = new Vector3(0, -0.02f, 0.045f);
+
+            Vector3 worldPos = camTrans.TransformPoint(localPos + hardwareOffset + adjustmentOffset);
             Quaternion worldRot = camTrans.rotation * localRot;
 
             // 3. Filter and Apply
@@ -353,66 +388,6 @@ public class ImageStreamer : MonoBehaviour
             Debug.LogError("Failed to send message: " + e.Message);
         }
     }
-
-    //private (Vector3, Quaternion) GetCubePosition(CornerData tag)
-    //{
-    //    // Use three corners of tag for computations
-    //    var viewportPoint0 = new Vector2(tag.corner0[0] / m_cameraAccess.CurrentResolution.x, 1.0f - (tag.corner0[1] / m_cameraAccess.CurrentResolution.y));
-    //    var viewportPoint1 = new Vector2(tag.corner1[0] / m_cameraAccess.CurrentResolution.x, 1.0f - (tag.corner1[1] / m_cameraAccess.CurrentResolution.y));
-    //    var viewportPoint3 = new Vector2(tag.corner3[0] / m_cameraAccess.CurrentResolution.x, 1.0f - (tag.corner3[1] / m_cameraAccess.CurrentResolution.y));
-
-    //    // Cast rays to three corners
-    //    var ray0 = m_cameraAccess.ViewportPointToRay(viewportPoint0);
-    //    var ray1 = m_cameraAccess.ViewportPointToRay(viewportPoint1);
-    //    var ray3 = m_cameraAccess.ViewportPointToRay(viewportPoint3);
-
-    //    // Instantiate 3D world points to zero
-    //    var worldPoint0 = Vector3.zero;
-    //    var worldPoint1 = Vector3.zero;
-    //    var worldPoint3 = Vector3.zero;
-
-    //    // Convert 2D viewport points to 3D world with raycasts
-    //    if (environmentRaycastManager.Raycast(ray0, out EnvironmentRaycastHit hitInfo0, environmentMask))
-    //    {
-    //        worldPoint0 = hitInfo0.point;
-    //        //// Place a GameObject at the place of intersection
-    //        //InteractiveCube.transform.SetPositionAndRotation(
-    //        //    hitInfo.point,
-    //        //    Quaternion.LookRotation(hitInfo.normal, Vector3.up));
-    //    }
-
-    //    if (environmentRaycastManager.Raycast(ray1, out EnvironmentRaycastHit hitInfo1, environmentMask))
-    //    {
-    //        worldPoint1 = hitInfo1.point;
-    //    }
-
-    //    if (environmentRaycastManager.Raycast(ray3, out EnvironmentRaycastHit hitInfo3, environmentMask))
-    //    {
-    //        worldPoint3 = hitInfo3.point;
-    //    }
-
-    //    // Check if points valid
-    //    if (worldPoint0 != Vector3.zero && worldPoint1 != Vector3.zero && worldPoint3 != Vector3.zero)
-    //    {
-    //        var normal = Vector3.Cross(worldPoint1 - worldPoint0, worldPoint3 - worldPoint0).normalized;
-
-    //        // Offset of tag corner from real cube corner
-    //        var offset = (worldPoint1 - worldPoint0) / 2.0f + (worldPoint3 - worldPoint0) / 2.0f - (normal * 0.02f);
-
-    //        //// Place cube at tag position and rotation
-    //        //InteractiveCube.transform.SetPositionAndRotation(
-    //        //    worldPoint0 + offset,
-    //        //    Quaternion.LookRotation((worldPoint1 - worldPoint0).normalized, normal));
-
-    //        Vector3 position = worldPoint0 + offset;
-    //        //Quaternion rotation = Quaternion.LookRotation((worldPoint1 - worldPoint0).normalized, normal);
-    //        Quaternion rotation = Quaternion.LookRotation(Vector3.Cross(normal, (worldPoint1 - worldPoint0).normalized), normal);
-
-    //        return (position, rotation);
-    //    }
-
-    //    return (Vector3.zero, Quaternion.identity);
-    //}
 
     // Send debug message
     //public void SendMessageToServer()
