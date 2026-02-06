@@ -285,7 +285,7 @@ public class ImageStreamer : MonoBehaviour
             // 2. Transform relative to Camera
             Transform camTrans = leftEyeCamera;
 
-            Vector3 worldPos = camTrans.TransformPoint(localPos + adjustmentOffset);
+            Vector3 worldPos = m_cameraAccess.GetCameraPose().position + (m_cameraAccess.GetCameraPose().rotation * (localPos + adjustmentOffset));
             Quaternion worldRot = camTrans.rotation * localRot;
 
             // 3. Filter and Apply
