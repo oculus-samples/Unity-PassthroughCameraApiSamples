@@ -42,14 +42,14 @@ public class ImageStreamer : MonoBehaviour
     // Parameters
     [SerializeField] private RawImage m_image;
     [SerializeField] private PassthroughCameraAccess m_cameraAccess;
-    [SerializeField] private Transform centerEyeCamera;
+    [SerializeField] private Transform leftEyeCamera;
     [SerializeField] private EnvironmentRaycastManager environmentRaycastManager;
     [SerializeField] private GameObject InteractiveCube;
     [SerializeField] private Text debugText;
     [SerializeField] private LayerMask environmentMask;
 
     [Header("Tuning Sensitivity")]
-    public float sensitivity = 0.1f;
+    public float sensitivity = 0.00001f;
 
     // One euro filter parameters
     private float minCutoffPosition = 0.70f;
@@ -64,6 +64,7 @@ public class ImageStreamer : MonoBehaviour
     private bool handshakeCompleted = false;
 
     private Vector3 adjustmentOffset = new Vector3(0.0f, 0.0f, 0.0f);
+    bool euroAdjustment = false;
 
     public class CornerData
     {
@@ -118,8 +119,8 @@ public class ImageStreamer : MonoBehaviour
     private float m_lastSendTime = 0f;
     private Texture2D m_cpuTexture;
     private RenderTexture m_smallDescriptor;
-    private int targetWidth = 640;
-    private int targetHeight = 640;
+    private int targetWidth = 1280;
+    private int targetHeight = 1280;
 
     private void Update()
     {
@@ -154,7 +155,7 @@ public class ImageStreamer : MonoBehaviour
             RenderTexture.active = currentRT;
 
             // 5. Encode the much smaller dataset
-            byte[] byteData = m_cpuTexture.EncodeToJPG(60);
+            byte[] byteData = m_cpuTexture.EncodeToJPG(90);
             SendMessageToServer(byteData);
         }
 
@@ -163,45 +164,66 @@ public class ImageStreamer : MonoBehaviour
 
     private void HandleControllerTuning()
     {
+        if (OVRInput.GetDown(OVRInput.Button.One))
+        {
+            euroAdjustment = !euroAdjustment;
+        }
+
+        // A button
         // 1. Read Right Thumbstick (Position Tuning)
         Vector2 rightStick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.RTouch);
         if (rightStick.magnitude > 0.1f)
         {
-            //minCutoffPosition += rightStick.y * sensitivity * Time.deltaTime;
-            //betaPosition += rightStick.x * sensitivity * Time.deltaTime;
+            if (euroAdjustment)
+            {
+                minCutoffPosition += rightStick.y * sensitivity * Time.deltaTime;
+                betaPosition += rightStick.x * sensitivity * Time.deltaTime;
 
-            //// Clamping to prevent negative values
-            //minCutoffPosition = Mathf.Max(0.01f, minCutoffPosition);
-            //betaPosition = Mathf.Max(0.0f, betaPosition);
+                // Clamping to prevent negative values
+                minCutoffPosition = Mathf.Max(0.01f, minCutoffPosition);
+                betaPosition = Mathf.Max(0.0f, betaPosition);
 
-            //positionFilter.UpdateParams(minCutoffPosition, betaPosition);
-            //Debug.Log($"POS TUNING: MinCutoff: {minCutoffPosition:F3} | Beta: {betaPosition:F3}");
-
-            adjustmentOffset.y += rightStick.y * sensitivity * Time.deltaTime;
-            adjustmentOffset.z += rightStick.x * sensitivity * Time.deltaTime;
+                positionFilter.UpdateParams(minCutoffPosition, betaPosition);
+                Debug.Log($"POS TUNING: MinCutoff: {minCutoffPosition:F3} | Beta: {betaPosition:F3}");
+            }
+            else
+            {
+                adjustmentOffset.y += rightStick.y * sensitivity * Time.deltaTime;
+                adjustmentOffset.z += rightStick.x * sensitivity * Time.deltaTime;
+            }
         }
 
         // 2. Read Left Thumbstick (Rotation Tuning)
         Vector2 leftStick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.LTouch);
         if (leftStick.magnitude > 0.1f)
         {
-            //minCutoffRotation += leftStick.y * sensitivity * Time.deltaTime;
-            //betaRotation += leftStick.x * sensitivity * Time.deltaTime;
+            if (euroAdjustment)
+            {
+                minCutoffRotation += leftStick.y * sensitivity * Time.deltaTime;
+                betaRotation += leftStick.x * sensitivity * Time.deltaTime;
 
-            //minCutoffRotation = Mathf.Max(0.01f, minCutoffRotation);
-            //betaRotation = Mathf.Max(0.0f, betaRotation);
+                minCutoffRotation = Mathf.Max(0.01f, minCutoffRotation);
+                betaRotation = Mathf.Max(0.0f, betaRotation);
 
-            //rotationFilter.UpdateParams(minCutoffRotation, betaRotation);
-            //Debug.Log($"ROT TUNING: MinCutoff: {minCutoffRotation:F3} | Beta: {betaRotation:F3}");
-
-            adjustmentOffset.x += leftStick.x * sensitivity * Time.deltaTime;
+                rotationFilter.UpdateParams(minCutoffRotation, betaRotation);
+                Debug.Log($"ROT TUNING: MinCutoff: {minCutoffRotation:F3} | Beta: {betaRotation:F3}");
+            }
+            else
+            {
+                adjustmentOffset.x += leftStick.x * sensitivity * Time.deltaTime;
+            }
         }
 
-        //debugText.text = "POS mincutoff: " + minCutoffPosition.ToString("F2") + "  |  " + "POS beta: " + betaPosition.ToString("F2")
-        //                    + "\n" +
-        //                 "ROT mincutoff: " + minCutoffRotation.ToString("F2") + "  |  " + "ROT beta: " + betaRotation.ToString("F2");
-
-        debugText.text = "X offset: " + adjustmentOffset.x.ToString("F2") + "  |  " + "Y offset: " + adjustmentOffset.y.ToString("F2") + "  |  " + "Z offset: " + adjustmentOffset.z.ToString("F2");
+        if (euroAdjustment)
+        {
+            debugText.text = "POS mincutoff: " + minCutoffPosition.ToString("F2") + "  |  " + "POS beta: " + betaPosition.ToString("F2")
+                            + "\n" +
+                         "ROT mincutoff: " + minCutoffRotation.ToString("F2") + "  |  " + "ROT beta: " + betaRotation.ToString("F2");
+        }
+        else
+        {
+            debugText.text = "X offset: " + adjustmentOffset.x.ToString("F5") + "  |  " + "Y offset: " + adjustmentOffset.y.ToString("F5") + "  |  " + "Z offset: " + adjustmentOffset.z.ToString("F5");
+        }
     }
 
     private void ConnectToServer()
@@ -261,11 +283,9 @@ public class ImageStreamer : MonoBehaviour
             Quaternion localRot = Quaternion.AngleAxis(-angle * Mathf.Rad2Deg, new Vector3(axis.x, -axis.y, axis.z));
 
             // 2. Transform relative to Camera
-            Transform camTrans = centerEyeCamera;
+            Transform camTrans = leftEyeCamera;
 
-            Vector3 hardwareOffset = new Vector3(0, -0.02f, 0.045f);
-
-            Vector3 worldPos = camTrans.TransformPoint(localPos + hardwareOffset + adjustmentOffset);
+            Vector3 worldPos = camTrans.TransformPoint(localPos + adjustmentOffset);
             Quaternion worldRot = camTrans.rotation * localRot;
 
             // 3. Filter and Apply

@@ -393,7 +393,7 @@ SkinnedMeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 471086821}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -449,7 +449,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 471086821}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 73eac66b128fc8749a21623225c34541, type: 3}
   m_Name: 
@@ -466,12 +466,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 471086821}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5cc5c234723e3a54d8dd09b131117743, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _meshType: 0
+  _meshType: 4
 --- !u!114 &471086826
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -502,7 +502,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2609c54f376cffc4da1ab9401cc1a36f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _skeletonType: 0
+  _skeletonType: 4
   _updateRootPose: 0
   _updateRootScale: 1
   _enablePhysicsCapsules: 0
@@ -737,10 +737,10 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 613029437}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: -0.07, z: 1.93}
   m_LocalScale: {x: 0.04, y: 0.04, z: 0.04}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -976,6 +976,14 @@ PrefabInstance:
       propertyPath: m_webCamTextureManager
       value: 
       objectReference: {fileID: 1608124433}
+    - target: {fileID: 3932261567339982053, guid: 0e9e59a9b5566489fad35afecaeac3a9, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 243
+      objectReference: {fileID: 0}
+    - target: {fileID: 3932261567339982053, guid: 0e9e59a9b5566489fad35afecaeac3a9, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -292
+      objectReference: {fileID: 0}
     - target: {fileID: 5325651034816108330, guid: 0e9e59a9b5566489fad35afecaeac3a9, type: 3}
       propertyPath: m_Name
       value: CameraViewerManagerPrefab
@@ -1022,7 +1030,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6182922352048559143, guid: 0e9e59a9b5566489fad35afecaeac3a9, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 1
+      value: 0.5
       objectReference: {fileID: 0}
     - target: {fileID: 6182922352048559143, guid: 0e9e59a9b5566489fad35afecaeac3a9, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1117,14 +1125,15 @@ MonoBehaviour:
   serverPort: 65432
   m_image: {fileID: 1094083037}
   m_cameraAccess: {fileID: 1608124433}
-  centerEyeCamera: {fileID: 1494685904}
+  leftEyeCamera: {fileID: 1494685904}
   environmentRaycastManager: {fileID: 272605734}
   InteractiveCube: {fileID: 613029437}
   debugText: {fileID: 746706242}
   environmentMask:
     serializedVersion: 2
     m_Bits: 63
-  sensitivity: 0.5
+  sensitivity: 0.05
+  targetFPS: 30
 --- !u!1 &1143997135
 GameObject:
   m_ObjectHideFlags: 0
@@ -1301,7 +1310,7 @@ SkinnedMeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1313156473}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -1357,7 +1366,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1313156473}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 73eac66b128fc8749a21623225c34541, type: 3}
   m_Name: 
@@ -1374,12 +1383,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1313156473}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5cc5c234723e3a54d8dd09b131117743, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _meshType: 1
+  _meshType: 5
 --- !u!114 &1313156478
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1410,7 +1419,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2609c54f376cffc4da1ab9401cc1a36f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _skeletonType: 1
+  _skeletonType: 5
   _updateRootPose: 0
   _updateRootScale: 1
   _enablePhysicsCapsules: 0
@@ -1593,7 +1602,7 @@ MonoBehaviour:
   requestRecordAudioPermissionOnStartup: 0
   requestPassthroughCameraAccessPermissionOnStartup: 0
   _localDimming: 1
-  _trackingOriginType: 1
+  _trackingOriginType: 0
   usePositionTracking: 1
   useRotationTracking: 1
   useIPDInPositionTracking: 1
@@ -2118,6 +2127,6 @@ SceneRoots:
   - {fileID: 1608124431}
   - {fileID: 1798160513}
   - {fileID: 717028859}
-  - {fileID: 613029441}
   - {fileID: 272605735}
   - {fileID: 2128261514}
+  - {fileID: 613029441}
