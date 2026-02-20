@@ -1,9 +1,10 @@
 {
   "dependencies": {
-    "com.meta.xr.mrutilitykit": "83.0.0",
+    "com.meta.xr.mrutilitykit": "83.0.1",
+    "com.meta.xr.sdk.interaction.ovr": "83.0.1",
+    "com.unity.ai.inference": "2.2.1",
     "com.unity.feature.development": "1.0.2",
     "com.unity.mobile.android-logcat": "1.4.6",
-    "com.unity.ai.inference": "2.2.1",
     "com.unity.ugui": "2.0.0",
     "com.unity.xr.management": "4.5.3",
     "com.unity.xr.openxr": "1.15.1",
