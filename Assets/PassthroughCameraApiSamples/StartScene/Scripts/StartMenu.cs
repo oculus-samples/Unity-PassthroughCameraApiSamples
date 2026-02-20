@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Meta.XR.Samples;
+using PassthroughCameraSamples.MultiObjectDetection;
+using Unity.InferenceEngine;
 using UnityEngine;
 
 namespace PassthroughCameraSamples.StartScene
@@ -16,6 +18,9 @@ namespace PassthroughCameraSamples.StartScene
         public OVROverlay Overlay;
         public OVROverlay Text;
         public OVRCameraRig VrRig;
+        [SerializeField] private ModelAsset m_objectDetectionModel;
+
+        private void Awake() => SentisInferenceRunManager.PreloadModel(m_objectDetectionModel);
 
         private void Start()
         {

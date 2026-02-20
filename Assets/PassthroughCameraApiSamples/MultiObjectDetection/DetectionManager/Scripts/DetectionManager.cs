@@ -1,6 +1,5 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
 
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using Meta.XR;
@@ -18,49 +17,42 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [Header("Controls configuration")]
         [SerializeField] private OVRInput.RawButton m_actionButton = OVRInput.RawButton.A;
 
-        [Header("Ui references")]
-        [SerializeField] private DetectionUiMenuManager m_uiMenuManager;
-
-        [Header("Placement configureation")]
-        [SerializeField] private GameObject m_spwanMarker;
-        [SerializeField] private EnvironmentRayCastSampleManager m_environmentRaycast;
-        [SerializeField] private float m_spawnDistance = 0.25f;
+        [Header("Placement configuration")]
+        [SerializeField] private DetectionSpawnMarkerAnim m_spawnMarker;
         [SerializeField] private AudioSource m_placeSound;
 
-        [Header("Sentis inference ref")]
-        [SerializeField] private SentisInferenceRunManager m_runInference;
         [SerializeField] private SentisInferenceUiManager m_uiInference;
         [Space(10)]
         public UnityEvent<int> OnObjectsIdentified;
 
-        private bool m_isPaused = true;
-        private List<GameObject> m_spwanedEntities = new();
-        private bool m_isStarted = false;
-        private bool m_isSentisReady = false;
-        private float m_delayPauseBackTime = 0;
+        private readonly List<DetectionSpawnMarkerAnim> m_spawnedEntities = new();
+        private bool m_isStarted;
+        internal OVRSpatialAnchor m_spatialAnchor;
+        private bool m_isHeadsetTracking;
 
-        #region Unity Functions
-        private void Awake() => OVRManager.display.RecenteredPose += CleanMarkersCallBack;
-
-        private void OnDestroy() => OVRManager.display.RecenteredPose -= CleanMarkersCallBack;
-
-        private IEnumerator Start()
+        private void Awake()
         {
-            // Wait until Sentis model is loaded
-            var sentisInference = FindAnyObjectByType<SentisInferenceRunManager>();
-            while (!sentisInference.IsModelLoaded)
-            {
-                yield return null;
-            }
-            m_isSentisReady = true;
+            StartCoroutine(UpdateSpatialAnchor());
+            OVRManager.TrackingLost += OnTrackingLost;
+            OVRManager.TrackingAcquired += OnTrackingAcquired;
         }
+
+        private void OnDestroy()
+        {
+            EraseSpatialAnchor();
+            OVRManager.TrackingLost -= OnTrackingLost;
+            OVRManager.TrackingAcquired -= OnTrackingAcquired;
+        }
+
+        private void OnTrackingLost() => m_isHeadsetTracking = false;
+        private void OnTrackingAcquired() => m_isHeadsetTracking = true;
 
         private void Update()
         {
             if (!m_isStarted)
             {
                 // Manage the Initial Ui Menu
-                if (m_cameraAccess.IsPlaying && m_isSentisReady)
+                if (m_cameraAccess.IsPlaying)
                 {
                     m_isStarted = true;
                 }
@@ -68,121 +60,202 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             else
             {
                 // Press A button to spawn 3d markers
-                if (OVRInput.GetUp(m_actionButton) && m_delayPauseBackTime <= 0)
+                if (OVRInput.GetUp(m_actionButton))
                 {
-                    SpwanCurrentDetectedObjects();
-                }
-                // Cooldown for the A button after return from the pause menu
-                m_delayPauseBackTime -= Time.deltaTime;
-                if (m_delayPauseBackTime <= 0)
-                {
-                    m_delayPauseBackTime = 0;
+                    SpawnCurrentDetectedObjects();
                 }
             }
 
-            // Don't start Sentis inference if the app is paused or we don't have a camera image yet
-            if (m_isPaused || !m_cameraAccess.IsPlaying)
+            // Press B button to clean all markers
+            if (OVRInput.GetDown(OVRInput.RawButton.B))
             {
-                if (m_isPaused)
-                {
-                    // Set the delay time for the A button to return from the pause menu
-                    m_delayPauseBackTime = 0.1f;
-                }
-                return;
-            }
-
-            // Run a new inference when the current inference finishes
-            if (!m_runInference.IsRunning())
-            {
-                m_runInference.RunInference(m_cameraAccess);
+                CleanMarkers();
             }
         }
-        #endregion
 
-        #region Marker Functions
-        /// <summary>
-        /// Clean 3d markers when the tracking space is re-centered.
-        /// </summary>
-        private void CleanMarkersCallBack()
+        private IEnumerator UpdateSpatialAnchor()
         {
-            foreach (var e in m_spwanedEntities)
+            while (true)
             {
-                Destroy(e, 0.1f);
+                yield return null;
+                if (m_spatialAnchor == null)
+                {
+                    yield return CreateSpatialAnchorAndSave();
+                    if (m_spatialAnchor == null)
+                    {
+                        continue;
+                    }
+                }
+
+                if (!m_spatialAnchor.IsTracked)
+                {
+                    yield return RestoreSpatialAnchorTracking();
+                }
             }
-            m_spwanedEntities.Clear();
+
+            IEnumerator CreateSpatialAnchorAndSave()
+            {
+                m_spatialAnchor = m_uiInference.ContentParent.gameObject.AddComponent<OVRSpatialAnchor>();
+
+                // Wait for localization because SaveAnchorAsync() requires the anchor to be localized first.
+                while (true)
+                {
+                    if (m_spatialAnchor == null)
+                    {
+                        // Spatial Anchor destroys itself when creation fails.
+                        yield break;
+                    }
+                    if (m_spatialAnchor.Localized)
+                    {
+                        break;
+                    }
+                    yield return null;
+                }
+
+                // Save the anchor.
+                var awaiter = m_spatialAnchor.SaveAnchorAsync().GetAwaiter();
+                while (!awaiter.IsCompleted)
+                {
+                    yield return null;
+                }
+                var saveAnchorResult = awaiter.GetResult();
+                if (!saveAnchorResult.Success)
+                {
+                    LogSpatialAnchor($"SaveAnchorAsync() failed {saveAnchorResult}", LogType.Error);
+                    EraseSpatialAnchor();
+                    yield break;
+                }
+                LogSpatialAnchor("created");
+            }
+
+            IEnumerator RestoreSpatialAnchorTracking()
+            {
+                // Try to restore spatial anchor tracking. If restoration fails, erase it.
+                LogSpatialAnchor("tracking was lost, restoring...");
+                const int numRetries = 20;
+                for (int i = 0; i < numRetries; i++)
+                {
+                    yield return new WaitForSeconds(1f);
+                    if (!m_isHeadsetTracking)
+                    {
+                        LogSpatialAnchor($"{nameof(m_isHeadsetTracking)} is false, retrying ({i})");
+                        continue;
+                    }
+
+                    var unboundAnchors = new List<OVRSpatialAnchor.UnboundAnchor>(1);
+                    var awaiter = OVRSpatialAnchor.LoadUnboundAnchorsAsync(new[]
+                    {
+                        m_spatialAnchor.Uuid
+                    }, unboundAnchors).GetAwaiter();
+                    while (!awaiter.IsCompleted)
+                    {
+                        yield return null;
+                    }
+                    var loadResult = awaiter.GetResult();
+                    if (!loadResult.Success)
+                    {
+                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() failed {loadResult.Status}, retrying ({i})", LogType.Error);
+                        continue;
+                    }
+                    if (unboundAnchors.Count != 0)
+                    {
+                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() unexpected count:{unboundAnchors.Count}, retrying ({i})", LogType.Error);
+                        continue;
+                    }
+                    yield return null;
+                    if (!m_spatialAnchor.IsTracked)
+                    {
+                        LogSpatialAnchor($"tracking is not restored, retrying ({i})");
+                        continue;
+                    }
+
+                    LogSpatialAnchor("tracking was restored successfully");
+                    yield break;
+                }
+
+                LogSpatialAnchor($"tracking restoration failed after {numRetries} retries", LogType.Warning);
+                EraseSpatialAnchor();
+            }
+        }
+
+        private void EraseSpatialAnchor()
+        {
+            if (m_spatialAnchor != null)
+            {
+                LogSpatialAnchor("EraseSpatialAnchor");
+                m_spatialAnchor.EraseAnchorAsync();
+                DestroyImmediate(m_spatialAnchor);
+                m_spatialAnchor = null;
+
+                CleanMarkers();
+                m_uiInference.ClearAnnotations();
+            }
+        }
+
+        private void CleanMarkers()
+        {
+            foreach (var e in m_spawnedEntities)
+            {
+                Destroy(e.gameObject);
+            }
+            m_spawnedEntities.Clear();
             OnObjectsIdentified?.Invoke(-1);
         }
+
+        private static void LogSpatialAnchor(string message, LogType logType = LogType.Log)
+        {
+            Debug.unityLogger.Log(logType, $"{nameof(OVRSpatialAnchor)}: {message}");
+        }
+
         /// <summary>
         /// Spwan 3d markers for the detected objects
         /// </summary>
-        private void SpwanCurrentDetectedObjects()
+        private void SpawnCurrentDetectedObjects()
         {
-            var count = 0;
-            foreach (var box in m_uiInference.BoxDrawn)
+            var newCount = 0;
+            foreach (SentisInferenceUiManager.BoundingBoxData box in m_uiInference.m_boxDrawn)
             {
-                if (PlaceMarkerUsingEnvironmentRaycast(box.WorldPos, box.ClassName))
+                if (!HasExistingMarkerInBoundingBox(box))
                 {
-                    count++;
+                    var marker = Instantiate(m_spawnMarker, box.BoxRectTransform.position, box.BoxRectTransform.rotation, m_uiInference.ContentParent);
+                    marker.GetComponent<DetectionSpawnMarkerAnim>().SetYoloClassName(box.ClassName);
+
+                    m_spawnedEntities.Add(marker);
+                    newCount++;
                 }
             }
-            if (count > 0)
+            if (newCount > 0)
             {
                 // Play sound if a new marker is placed.
                 m_placeSound.Play();
             }
-            OnObjectsIdentified?.Invoke(count);
-        }
+            OnObjectsIdentified?.Invoke(newCount);
 
-        /// <summary>
-        /// Place a marker using the environment raycast
-        /// </summary>
-        private bool PlaceMarkerUsingEnvironmentRaycast(Vector3? position, string className)
-        {
-            // Check if the position is valid
-            if (!position.HasValue)
+            bool HasExistingMarkerInBoundingBox(SentisInferenceUiManager.BoundingBoxData box)
             {
-                return false;
-            }
-
-            // Check if you spanwed the same object before
-            var existMarker = false;
-            foreach (var e in m_spwanedEntities)
-            {
-                var markerClass = e.GetComponent<DetectionSpawnMarkerAnim>();
-                if (markerClass)
+                foreach (var marker in m_spawnedEntities)
                 {
-                    var dist = Vector3.Distance(e.transform.position, position.Value);
-                    if (dist < m_spawnDistance && markerClass.GetYoloClassName() == className)
+                    if (marker.GetYoloClassName() == box.ClassName)
                     {
-                        existMarker = true;
-                        break;
+                        var markerWorldPos = marker.transform.position;
+                        Vector2 localPos = box.BoxRectTransform.InverseTransformPoint(markerWorldPos);
+                        var sizeDelta = box.BoxRectTransform.sizeDelta;
+                        var currentBox = new Rect(
+                            -sizeDelta.x * 0.5f,
+                            -sizeDelta.y * 0.5f,
+                            sizeDelta.x,
+                            sizeDelta.y
+                        );
+
+                        if (currentBox.Contains(localPos))
+                        {
+                            return true;
+                        }
                     }
                 }
+
+                return false;
             }
-
-            if (!existMarker)
-            {
-                // spawn a visual marker
-                var eMarker = Instantiate(m_spwanMarker);
-                m_spwanedEntities.Add(eMarker);
-
-                // Update marker transform with the real world transform
-                eMarker.transform.SetPositionAndRotation(position.Value, Quaternion.identity);
-                eMarker.GetComponent<DetectionSpawnMarkerAnim>().SetYoloClassName(className);
-            }
-
-            return !existMarker;
         }
-        #endregion
-
-        #region Public Functions
-        /// <summary>
-        /// Pause the detection logic when the pause menu is active
-        /// </summary>
-        public void OnPause(bool pause)
-        {
-            m_isPaused = pause;
-        }
-        #endregion
     }
 }

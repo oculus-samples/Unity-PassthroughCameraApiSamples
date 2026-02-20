@@ -56,13 +56,8 @@ namespace PassthroughCameraSamples.MultiObjectDetection.Editor
             var allScores = modelOutput[0, 4.., ..].Transpose(0, 1);
             var scores = Functional.ReduceMax(allScores, 1);                                    //shape=(N)
             var classIDs = Functional.ArgMax(allScores, 1);                                     //shape=(N)
-            var boxCorners = Functional.MatMul(boxCoords, centersToCorners);                    //shape=(N,4)
-            var indices = Functional.NMS(boxCorners, scores, m_iouThreshold, m_scoreThreshold); //shape=(N)
-            var indices2 = indices.Unsqueeze(-1).BroadcastTo(new[] { 4 });                      //shape=(N,4)
-            var labelIDs = classIDs.Gather(0, indices);                                         //shape=(N)
-            var coords = boxCoords.Gather(0, indices2);                                         //shape=(N,4)
-
-            var modelFinal = graph.Compile(coords, labelIDs);
+            var corners = Functional.MatMul(boxCoords, centersToCorners);                    //shape=(N,4)
+            var modelFinal = graph.Compile(corners, classIDs, scores);
 
             //Export the model to Sentis format
             ModelQuantizer.QuantizeWeights(QuantizationType.Uint8, ref modelFinal);

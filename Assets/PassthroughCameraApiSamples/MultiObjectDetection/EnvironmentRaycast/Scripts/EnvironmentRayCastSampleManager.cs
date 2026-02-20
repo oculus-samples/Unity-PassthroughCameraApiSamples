@@ -43,7 +43,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                 }
                 else
                 {
-                    Debug.Log("RaycastManager failed");
                     return null;
                 }
             }

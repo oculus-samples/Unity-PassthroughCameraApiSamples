@@ -3,7 +3,6 @@
 using System.Collections.Generic;
 using Meta.XR;
 using Meta.XR.Samples;
-using Unity.InferenceEngine;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -13,202 +12,216 @@ namespace PassthroughCameraSamples.MultiObjectDetection
     [MetaCodeSample("PassthroughCameraApiSamples-MultiObjectDetection")]
     public class SentisInferenceUiManager : MonoBehaviour
     {
-        [Header("Placement configureation")]
+        [Header("Placement configuration")]
         [SerializeField] private EnvironmentRayCastSampleManager m_environmentRaycast;
         [SerializeField] private PassthroughCameraAccess m_cameraAccess;
 
-        [Header("UI display references")]
-        [SerializeField] private SentisObjectDetectedUiManager m_detectionCanvas;
-        [SerializeField] private RawImage m_displayImage;
-        [SerializeField] private Sprite m_boxTexture;
-        [SerializeField] private Color m_boxColor;
-        [SerializeField] private Font m_font;
-        [SerializeField] private Color m_fontColor;
-        [SerializeField] private int m_fontSize = 80;
+        [SerializeField] private RectTransform m_detectionBoxPrefab;
         [Space(10)]
         public UnityEvent<int> OnObjectsDetected;
 
-        public List<BoundingBox> BoxDrawn = new();
-
+        internal readonly List<BoundingBoxData> m_boxDrawn = new();
         private string[] m_labels;
-        private List<GameObject> m_boxPool = new();
-        private Transform m_displayLocation;
+        private readonly List<BoundingBoxData> m_boxPool = new();
 
-        //bounding box data
-        public struct BoundingBox
+        internal class BoundingBoxData
         {
-            public float CenterX;
-            public float CenterY;
-            public float Width;
-            public float Height;
-            public string Label;
-            public Vector3? WorldPos;
             public string ClassName;
+            public int ClassId;
+            public RectTransform BoxRectTransform;
+            public float lastUpdateTime;
         }
 
-        #region Unity Functions
-        private void Start()
+        private void Awake() => m_detectionBoxPrefab.gameObject.SetActive(false);
+
+        private void Update()
         {
-            m_displayLocation = m_displayImage.transform;
+            // Remove boxes that haven't been updated recently
+            for (int i = m_boxDrawn.Count - 1; i >= 0; i--)
+            {
+                var box = m_boxDrawn[i];
+                const float timeToPersistBoxes = 3f;
+                if (Time.time - box.lastUpdateTime > timeToPersistBoxes)
+                {
+                    ReturnToPool(box);
+                    m_boxDrawn.RemoveAt(i);
+                }
+            }
         }
-        #endregion
 
-        #region Detection Functions
-        public void OnObjectDetectionError()
-        {
-            // Clear current boxes
-            ClearAnnotations();
-
-            // Set obejct found to 0
-            OnObjectsDetected?.Invoke(0);
-        }
-        #endregion
-
-        #region BoundingBoxes functions
         public void SetLabels(TextAsset labelsAsset)
         {
-            //Parse neural net m_labels
+            // Parse neural net labels
             m_labels = labelsAsset.text.Split('\n');
         }
 
-        public void SetDetectionCapture(Texture image)
+        public void DrawUIBoxes(List<(int classId, Vector4 boundingBox)> detections, Vector2 inputSize, Pose cameraPose)
         {
-            m_displayImage.texture = image;
-            m_detectionCanvas.CapturePosition();
-        }
+            Vector2 currentResolution = m_cameraAccess.CurrentResolution;
 
-        public void DrawUIBoxes(Tensor<float> output, Tensor<int> labelIDs, float imageWidth, float imageHeight, Pose cameraPose)
-        {
-            // Updte canvas position
-            m_detectionCanvas.UpdatePosition();
-
-            // Clear current boxes
-            ClearAnnotations();
-
-            float displayWidth = m_displayImage.rectTransform.rect.width;
-            var displayHeight = m_displayImage.rectTransform.rect.height;
-
-            var boxesFound = output.shape[0];
-            if (boxesFound <= 0)
+            if (detections.Count == 0)
             {
                 OnObjectsDetected?.Invoke(0);
                 return;
             }
-            var maxBoxes = Mathf.Min(boxesFound, 200);
 
-            OnObjectsDetected?.Invoke(maxBoxes);
+            OnObjectsDetected?.Invoke(detections.Count);
 
-            //Draw the bounding boxes
-            for (var n = 0; n < maxBoxes; n++)
+            // Draw the bounding boxes
+            for (var i = 0; i < detections.Count; i++)
             {
-                // Get bounding box center coordinates
-                var normalizedCenterX = output[n, 0] / imageWidth;
-                var normalizedCenterY = output[n, 1] / imageHeight;
-                var centerX = displayWidth * (normalizedCenterX - 0.5f);
-                var centerY = displayHeight * (normalizedCenterY - 0.5f);
+                var detection = detections[i];
+                float x1 = detection.boundingBox[0];
+                float y1 = detection.boundingBox[1];
+                float x2 = detection.boundingBox[2];
+                float y2 = detection.boundingBox[3];
+                Rect rect = new Rect(x1, y1, x2 - x1, y2 - y1);
+                // Rect rect = Rect.MinMaxRect(x1, y1, x2, y2); // todo
 
-                // Get object class name
-                var classname = m_labels[labelIDs[n]].Replace(" ", "_");
+                Vector2 normalizedCenter = rect.center / inputSize;
+                Vector2 center = currentResolution * (normalizedCenter - Vector2.one * 0.5f);
+
+                // Get the object class name
+                var classname = m_labels[detection.classId].Replace(" ", "_");
 
                 // Get the 3D marker world position using Depth Raycast
-                var ray = m_cameraAccess.ViewportPointToRay(new Vector2(normalizedCenterX, 1.0f - normalizedCenterY), cameraPose);
+                var ray = m_cameraAccess.ViewportPointToRay(new Vector2(normalizedCenter.x, 1.0f - normalizedCenter.y), cameraPose);
                 var worldPos = m_environmentRaycast.Raycast(ray);
-
-                // Create a new bounding box
-                var box = new BoundingBox
+                if (!worldPos.HasValue)
                 {
-                    CenterX = centerX,
-                    CenterY = centerY,
-                    ClassName = classname,
-                    Width = output[n, 2] * (displayWidth / imageWidth),
-                    Height = output[n, 3] * (displayHeight / imageHeight),
-                    Label = $"Id: {n} Class: {classname} Center (px): {(int)centerX},{(int)centerY} Center (%): {normalizedCenterX:0.00},{normalizedCenterY:0.00}",
-                    WorldPos = worldPos,
-                };
-
-                // Add to the list of boxes
-                BoxDrawn.Add(box);
-
-                // Draw 2D box
-                DrawBox(box, n);
-            }
-        }
-
-        private void ClearAnnotations()
-        {
-            foreach (var box in m_boxPool)
-            {
-                box?.SetActive(false);
-            }
-            BoxDrawn.Clear();
-        }
-
-        private void DrawBox(BoundingBox box, int id)
-        {
-            //Create the bounding box graphic or get from pool
-            GameObject panel;
-            if (id < m_boxPool.Count)
-            {
-                panel = m_boxPool[id];
-                if (panel == null)
-                {
-                    panel = CreateNewBox(m_boxColor);
+                    Debug.Log($"RaycastManager failed, ray:{ray}, cameraPose:{cameraPose}");
+                    continue;
                 }
-                else
+                var normRect = new Rect(
+                    rect.x / inputSize.x,
+                    1f - rect.yMax / inputSize.y,
+                    rect.width / inputSize.x,
+                    rect.height / inputSize.y
+                );
+
+                // Calculate distance and center point first
+                float distance = Vector3.Distance(cameraPose.position, worldPos.Value);
+                var worldSpaceCenter = m_cameraAccess.ViewportPointToRay(normRect.center, cameraPose).GetPoint(distance);
+                var normal = (worldSpaceCenter - cameraPose.position).normalized;
+
+                // Intersect corner rays with the plane perpendicular to the camera view
+                var plane = new Plane(normal, worldSpaceCenter);
+                var minRay = m_cameraAccess.ViewportPointToRay(normRect.min, cameraPose);
+                var maxRay = m_cameraAccess.ViewportPointToRay(normRect.max, cameraPose);
+                plane.Raycast(minRay, out float intersectionDistanceMin);
+                plane.Raycast(maxRay, out float intersectionDistanceMax);
+                var min = minRay.GetPoint(intersectionDistanceMin);
+                var max = maxRay.GetPoint(intersectionDistanceMax);
+
+                // Transform world-space positions to camera's local space to get 2D size
+                var topLeftLocal = Quaternion.Inverse(cameraPose.rotation) * (min - cameraPose.position);
+                var bottomRightLocal = Quaternion.Inverse(cameraPose.rotation) * (max - cameraPose.position);
+                var size = new Vector2(
+                    Mathf.Abs(bottomRightLocal.x - topLeftLocal.x),
+                    Mathf.Abs(bottomRightLocal.y - topLeftLocal.y));
+
+                var boxData = GetOrCreateBoundingBoxData(detection.classId, worldSpaceCenter, size);
+                var boxRectTransform = boxData.BoxRectTransform;
+                boxRectTransform.GetComponentInChildren<Text>().text = $"Id: {detection.classId} Class: {classname} Center (px): {center:0.0} Center (%): {normalizedCenter:0.0}";
+                boxRectTransform.SetPositionAndRotation(worldSpaceCenter, Quaternion.LookRotation(normal));
+                boxRectTransform.sizeDelta = size;
+                boxData.lastUpdateTime = Time.time;
+            }
+        }
+
+        private BoundingBoxData GetOrCreateBoundingBoxData(int classId, Vector3 worldSpaceCenter, Vector2 worldSpaceSize)
+        {
+            BoundingBoxData reusedBox = null;
+            for (int i = m_boxDrawn.Count - 1; i >= 0; i--)
+            {
+                var box = m_boxDrawn[i];
+                var localPos = box.BoxRectTransform.InverseTransformPoint(worldSpaceCenter);
+                var newBox = new Vector4(
+                    localPos.x - worldSpaceSize.x * 0.5f,
+                    localPos.y - worldSpaceSize.y * 0.5f,
+                    localPos.x + worldSpaceSize.x * 0.5f,
+                    localPos.y + worldSpaceSize.y * 0.5f
+                );
+
+                var sizeDelta = box.BoxRectTransform.sizeDelta;
+                var currentBox = new Vector4(
+                    -sizeDelta.x * 0.5f,
+                    -sizeDelta.y * 0.5f,
+                    sizeDelta.x * 0.5f,
+                    sizeDelta.y * 0.5f);
+
+                if (box.ClassId == classId)
                 {
-                    panel.SetActive(true);
+                    // If the new box overlaps with an existing one of the same class, reuse it
+                    if (SentisInferenceRunManager.CalculateIoU(newBox, currentBox) > 0f)
+                    {
+                        if (reusedBox == null)
+                        {
+                            reusedBox = box;
+                        }
+                        else
+                        {
+                            // Same overlapping class - remove the existing box
+                            ReturnToPool(box);
+                            m_boxDrawn.RemoveAt(i);
+                        }
+                    }
+                }
+                // If the new box's IoU with another class is significant, remove the existing box
+                else if (SentisInferenceRunManager.CalculateIoU(newBox, currentBox) > 0.1f)
+                {
+                    // Different overlapping class - remove the existing box
+                    ReturnToPool(box);
+                    m_boxDrawn.RemoveAt(i);
                 }
             }
-            else
+
+            if (reusedBox != null)
             {
-                panel = CreateNewBox(m_boxColor);
+                return reusedBox;
             }
-            //Set box position
-            panel.transform.localPosition = new Vector3(box.CenterX, -box.CenterY, box.WorldPos.HasValue ? box.WorldPos.Value.z : 0.0f);
-            //Set box rotation
-            panel.transform.rotation = Quaternion.LookRotation(panel.transform.position - m_detectionCanvas.GetCapturedCameraPosition());
-            //Set box size
-            var rt = panel.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(box.Width, box.Height);
-            //Set label text
-            var label = panel.GetComponentInChildren<Text>();
-            label.text = box.Label;
-            label.fontSize = 12;
+
+            // Create a new box
+            var newData = GetBoxFromPoolOrCreate();
+            newData.ClassId = classId;
+            newData.ClassName = m_labels[classId].Replace(" ", "_");
+            m_boxDrawn.Add(newData);
+            return newData;
         }
 
-        private GameObject CreateNewBox(Color color)
+        private BoundingBoxData GetBoxFromPoolOrCreate()
         {
-            //Create the box and set image
-            var panel = new GameObject("ObjectBox");
-            _ = panel.AddComponent<CanvasRenderer>();
-            var img = panel.AddComponent<Image>();
-            img.color = color;
-            img.sprite = m_boxTexture;
-            img.type = Image.Type.Sliced;
-            img.fillCenter = false;
-            panel.transform.SetParent(m_displayLocation, false);
+            if (m_boxPool.Count > 0)
+            {
+                var pooled = m_boxPool[m_boxPool.Count - 1];
+                pooled.BoxRectTransform.gameObject.SetActive(true);
+                m_boxPool.RemoveAt(m_boxPool.Count - 1);
+                return pooled;
+            }
 
-            //Create the label
-            var text = new GameObject("ObjectLabel");
-            _ = text.AddComponent<CanvasRenderer>();
-            text.transform.SetParent(panel.transform, false);
-            var txt = text.AddComponent<Text>();
-            txt.font = m_font;
-            txt.color = m_fontColor;
-            txt.fontSize = m_fontSize;
-            txt.horizontalOverflow = HorizontalWrapMode.Overflow;
-
-            var rt2 = text.GetComponent<RectTransform>();
-            rt2.offsetMin = new Vector2(20, rt2.offsetMin.y);
-            rt2.offsetMax = new Vector2(0, rt2.offsetMax.y);
-            rt2.offsetMin = new Vector2(rt2.offsetMin.x, 0);
-            rt2.offsetMax = new Vector2(rt2.offsetMax.x, 30);
-            rt2.anchorMin = new Vector2(0, 0);
-            rt2.anchorMax = new Vector2(1, 1);
-
-            m_boxPool.Add(panel);
-            return panel;
+            var boxRectTransform = Instantiate(m_detectionBoxPrefab, ContentParent);
+            boxRectTransform.gameObject.SetActive(true);
+            return new BoundingBoxData
+            {
+                BoxRectTransform = boxRectTransform
+            };
         }
-        #endregion
+
+        internal Transform ContentParent => m_detectionBoxPrefab.parent;
+
+        private void ReturnToPool(BoundingBoxData box)
+        {
+            box.BoxRectTransform.gameObject.SetActive(false);
+            m_boxPool.Add(box);
+        }
+
+        internal void ClearAnnotations()
+        {
+            foreach (var box in m_boxDrawn)
+            {
+                ReturnToPool(box);
+            }
+            m_boxDrawn.Clear();
+        }
     }
 }

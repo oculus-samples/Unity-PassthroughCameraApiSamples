@@ -1,8 +1,11 @@
 ﻿// Copyright (c) Meta Platforms, Inc. and affiliates.
-using System;
+
 using System.Collections;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Meta.XR;
 using Meta.XR.Samples;
+using Unity.Collections;
 using Unity.InferenceEngine;
 using UnityEngine;
 
@@ -11,240 +14,237 @@ namespace PassthroughCameraSamples.MultiObjectDetection
     [MetaCodeSample("PassthroughCameraApiSamples-MultiObjectDetection")]
     public class SentisInferenceRunManager : MonoBehaviour
     {
+        [SerializeField] private PassthroughCameraAccess m_cameraAccess;
+        [SerializeField] private DetectionUiMenuManager m_uiMenuManager;
+        [SerializeField] private DetectionManager m_detectionManager;
+
         [Header("Sentis Model config")]
-        [SerializeField] private Vector2Int m_inputSize = new(640, 640);
         [SerializeField] private BackendType m_backend = BackendType.CPU;
         [SerializeField] private ModelAsset m_sentisModel;
-        [SerializeField] private int m_layersPerFrame = 25;
         [SerializeField] private TextAsset m_labelsAsset;
-        public bool IsModelLoaded { get; private set; } = false;
+        [SerializeField, Range(0, 1)] private float m_iouThreshold = 0.6f;
+        [SerializeField, Range(0, 1)] private float m_scoreThreshold = 0.23f;
 
         [Header("UI display references")]
         [SerializeField] private SentisInferenceUiManager m_uiInference;
 
         [Header("[Editor Only] Convert to Sentis")]
         public ModelAsset OnnxModel;
-        [SerializeField, Range(0, 1)] private float m_iouThreshold = 0.6f;
-        [SerializeField, Range(0, 1)] private float m_scoreThreshold = 0.23f;
         [Space(40)]
 
         private Worker m_engine;
-        private IEnumerator m_schedule;
-        private bool m_started = false;
-        private Tensor<float> m_input;
-        private Model m_model;
-        private int m_download_state = 0;
-        private Tensor<float> m_output;
-        private Tensor<int> m_labelIDs;
-        private Tensor<float> m_pullOutput;
-        private Tensor<int> m_pullLabelIDs;
-        private bool m_isWaiting = false;
-        private Pose m_imageCameraPose;
+        private Vector2Int m_inputSize;
+        private readonly List<(int classId, Vector4 boundingBox)> m_detections = new List<(int classId, Vector4 boundingBox)>();
 
-        #region Unity Functions
-        private IEnumerator Start()
+        private void Awake()
         {
-            // Wait for the UI to be ready because when Sentis load the model it will block the main thread.
-            yield return new WaitForSeconds(0.05f);
-
-            m_uiInference.SetLabels(m_labelsAsset);
-            LoadModel();
+            var model = ModelLoader.Load(m_sentisModel);
+            var inputShape = model.inputs[0].shape;
+            m_inputSize = new Vector2Int(inputShape.Get(2), inputShape.Get(3));
+            m_engine = new Worker(model, m_backend);
         }
 
-        private void Update()
+        private IEnumerator Start()
         {
-            InferenceUpdate();
+            m_uiInference.SetLabels(m_labelsAsset);
+
+            while (true)
+            {
+                while (m_uiMenuManager.IsPaused)
+                {
+                    yield return null;
+                }
+                yield return RunInference();
+            }
         }
 
         private void OnDestroy()
         {
-            if (m_schedule != null)
+            m_engine.PeekOutput(0)?.CompleteAllPendingOperations();
+            m_engine.PeekOutput(1)?.CompleteAllPendingOperations();
+            m_engine.PeekOutput(2)?.CompleteAllPendingOperations();
+            m_engine.Dispose();
+        }
+
+        internal static void PreloadModel(ModelAsset modelAsset)
+        {
+            // Load model
+            var model = ModelLoader.Load(modelAsset);
+            var inputShape = model.inputs[0].shape;
+
+            // Create engine to run model
+            using var worker = new Worker(model, BackendType.CPU);
+
+            // Run inference with an empty image to load the model in the memory. The first inference blocks the main thread for a long time, so we're doing it on the app launch
+            Texture tempTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            var textureTransform = new TextureTransform().SetDimensions(tempTexture.width, tempTexture.height, 3);
+            using var input = new Tensor<float>(new TensorShape(1, 3, inputShape.Get(2), inputShape.Get(3)));
+            TextureConverter.ToTensor(tempTexture, input, textureTransform);
+            worker.Schedule(input);
+
+            // Complete the inference immediately and destroy the temporary texture
+            worker.PeekOutput(0).CompleteAllPendingOperations();
+            worker.PeekOutput(1).CompleteAllPendingOperations();
+            worker.PeekOutput(2).CompleteAllPendingOperations();
+            Destroy(tempTexture);
+        }
+
+        private IEnumerator RunInference()
+        {
+            if (!m_cameraAccess.IsPlaying)
             {
-                StopCoroutine(m_schedule);
+                yield break;
             }
-            m_input?.Dispose();
-            m_engine?.Dispose();
-        }
-        #endregion
 
-        #region Public Functions
-        public void RunInference(PassthroughCameraAccess cameraAccess)
-        {
-            // If the inference is not running prepare the input
-            if (!m_started)
+            [DllImport("OVRPlugin", CallingConvention = CallingConvention.Cdecl)]
+            static extern OVRPlugin.Result ovrp_GetNodePoseStateAtTime(double time, OVRPlugin.Node nodeId, out OVRPlugin.PoseStatef nodePoseState);
+            if (!ovrp_GetNodePoseStateAtTime(OVRPlugin.GetTimeInSeconds(), OVRPlugin.Node.Head, out _).IsSuccess())
             {
-                m_imageCameraPose = cameraAccess.GetCameraPose();
-                // clean last input
-                m_input?.Dispose();
-                // Update Capture data
-                Texture targetTexture = cameraAccess.GetTexture();
-                m_uiInference.SetDetectionCapture(targetTexture);
-                // Convert the texture to a Tensor and schedule the inference
-                var textureTransform = new TextureTransform().SetDimensions(targetTexture.width, targetTexture.height, 3);
-                m_input = new Tensor<float>(new TensorShape(1, 3, m_inputSize.x, m_inputSize.y));
-                TextureConverter.ToTensor(targetTexture, m_input, textureTransform);
-                m_schedule = m_engine.ScheduleIterable(m_input);
-                m_download_state = 0;
-                m_started = true;
+                Debug.Log("ovrp_GetNodePoseStateAtTime failed, which means 'm_cameraAccess.GetCameraPose()' is not reliable, skipping.");
+                yield break;
             }
-        }
 
-        public bool IsRunning()
-        {
-            return m_started;
-        }
-        #endregion
+            var cachedCameraPose = m_cameraAccess.GetCameraPose();
 
-        #region Inference Functions
-        private void LoadModel()
-        {
-            //Load model
-            var model = ModelLoader.Load(m_sentisModel);
-            Debug.Log($"Sentis model loaded correctly with iouThreshold: {m_iouThreshold} and scoreThreshold: {m_scoreThreshold}");
-            //Create engine to run model
-            m_engine = new Worker(model, m_backend);
-            //Run a inference with a empty image to load the model in the memory and not pause the main thread.
-            Texture m_loadingTexture = new Texture2D(m_inputSize.x, m_inputSize.y, TextureFormat.RGBA32, false);
-            var textureTransform = new TextureTransform().SetDimensions(m_loadingTexture.width, m_loadingTexture.height, 3);
-            m_input = new Tensor<float>(new TensorShape(1, 3, m_inputSize.x, m_inputSize.y));
-            TextureConverter.ToTensor(m_loadingTexture, m_input, textureTransform);
-            m_engine.Schedule(m_input);
-            IsModelLoaded = true;
-        }
+            // Update Capture data
+            Texture targetTexture = m_cameraAccess.GetTexture();
 
-        private void InferenceUpdate()
-        {
-            // Run the inference layer by layer to not block the main thread.
-            if (m_started)
+            // Convert the texture to a Tensor and schedule the inference
+            var textureTransform = new TextureTransform().SetDimensions(targetTexture.width, targetTexture.height, 3);
+            using var input = new Tensor<float>(new TensorShape(1, 3, m_inputSize.x, m_inputSize.y));
+            TextureConverter.ToTensor(targetTexture, input, textureTransform);
+
+            // Schedule all model layers
+            m_engine.Schedule(input);
+
+            // Get the results. ReadbackAndCloneAsync waits for all layers to complete before returning the result
+            var boxesAwaiter = (m_engine.PeekOutput(0) as Tensor<float>).ReadbackAndCloneAsync().GetAwaiter();
+            while (!boxesAwaiter.IsCompleted)
             {
-                try
+                yield return null;
+            }
+            using var boxes = boxesAwaiter.GetResult();
+            if (boxes.shape[0] == 0)
+            {
+                yield break;
+            }
+
+            var classIDsAwaiter = (m_engine.PeekOutput(1) as Tensor<int>).ReadbackAndCloneAsync().GetAwaiter();
+            while (!classIDsAwaiter.IsCompleted)
+            {
+                yield return null;
+            }
+            using var classIDs = classIDsAwaiter.GetResult();
+            if (classIDs.shape[0] == 0)
+            {
+                Debug.LogError("classIDs.shape[0] == 0");
+                yield break;
+            }
+
+            var scoresAwaiter = (m_engine.PeekOutput(2) as Tensor<float>).ReadbackAndCloneAsync().GetAwaiter();
+            while (!scoresAwaiter.IsCompleted)
+            {
+                yield return null;
+            }
+            using var scores = scoresAwaiter.GetResult();
+            if (scores.shape[0] == 0)
+            {
+                Debug.LogError("scores.shape[0] == 0");
+                yield break;
+            }
+
+            NonMaxSuppression(m_detections, boxes, classIDs, scores, m_iouThreshold, m_scoreThreshold);
+
+            // Checking if spatial anchor is tracked ensures bounding boxes are placed at correct world space positIons.
+            if (!m_cameraAccess.IsPlaying || m_detectionManager.m_spatialAnchor == null || !m_detectionManager.m_spatialAnchor.IsTracked)
+            {
+                yield break;
+            }
+
+            // Update UI.
+            m_uiInference.DrawUIBoxes(m_detections, m_inputSize, cachedCameraPose);
+        }
+
+        private static void NonMaxSuppression(List<(int classId, Vector4 boundingBox)> outDetections, Tensor<float> boxes, Tensor<int> classIDs, Tensor<float> scores, float iouThreshold, float scoreThreshold)
+        {
+            outDetections.Clear();
+
+            // Filter by score threshold first
+            List<int> filteredIndices = new List<int>();
+            NativeArray<float>.ReadOnly scoresArray = scores.AsReadOnlyNativeArray();
+            for (int i = 0; i < scoresArray.Length; i++)
+            {
+                if (scoresArray[i] >= scoreThreshold)
                 {
-                    if (m_download_state == 0)
+                    filteredIndices.Add(i);
+                }
+            }
+
+            if (filteredIndices.Count == 0)
+            {
+                return;
+            }
+
+            // Sort filtered indices by scores in descending order
+            filteredIndices.Sort((a, b) => scoresArray[b].CompareTo(scoresArray[a]));
+
+            // Apply NMS algorithm
+            bool[] suppressed = new bool[filteredIndices.Count];
+            for (int i = 0; i < filteredIndices.Count; i++)
+            {
+                if (suppressed[i])
+                    continue;
+
+                int idx = filteredIndices[i];
+
+                // Add this detection to results
+                outDetections.Add((classIDs[idx], GetBox(idx)));
+
+                // Suppress overlapping boxes regardless of class
+                for (int j = i + 1; j < filteredIndices.Count; j++)
+                {
+                    if (suppressed[j])
+                        continue;
+
+                    int jdx = filteredIndices[j];
+
+                    float iou = CalculateIoU(GetBox(idx), GetBox(jdx));
+                    if (iou > iouThreshold)
                     {
-                        var it = 0;
-                        while (m_schedule.MoveNext())
-                        {
-                            if (++it % m_layersPerFrame == 0)
-                                return;
-                        }
-                        m_download_state = 1;
-                    }
-                    else
-                    {
-                        // Get the result once all layers are processed
-                        GetInferencesResults();
+                        suppressed[j] = true;
                     }
                 }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Sentis error: {e.Message}");
-                }
             }
+
+            Vector4 GetBox(int i) => new Vector4(boxes[i, 0], boxes[i, 1], boxes[i, 2], boxes[i, 3]);
         }
 
-        private void PollRequestOuput()
+        internal static float CalculateIoU(Vector4 boxA, Vector4 boxB)
         {
-            // Get the output 0 (coordinates data) from the model output using Sentis pull request.
-            m_pullOutput = m_engine.PeekOutput(0) as Tensor<float>;
-            if (m_pullOutput.dataOnBackend != null)
-            {
-                m_pullOutput.ReadbackRequest();
-                m_isWaiting = true;
-            }
-            else
-            {
-                Debug.LogError("Sentis: No data output m_output");
-                m_download_state = 4;
-            }
+            // Boxes are in format (topLeftX, topLeftY, bottomRightX, bottomRightY)
+            // Calculate intersection coordinates
+            float x1 = Mathf.Max(boxA.x, boxB.x);
+            float y1 = Mathf.Max(boxA.y, boxB.y);
+            float x2 = Mathf.Min(boxA.z, boxB.z);
+            float y2 = Mathf.Min(boxA.w, boxB.w);
+
+            // Calculate intersection area
+            float intersectionWidth = Mathf.Max(0, x2 - x1);
+            float intersectionHeight = Mathf.Max(0, y2 - y1);
+            float intersectionArea = intersectionWidth * intersectionHeight;
+
+            // Calculate individual box areas
+            float boxAArea = (boxA.z - boxA.x) * (boxA.w - boxA.y);
+            float boxBArea = (boxB.z - boxB.x) * (boxB.w - boxB.y);
+
+            // Calculate union area
+            float unionArea = boxAArea + boxBArea - intersectionArea;
+
+            // Return IoU (Intersection over Union)
+            if (unionArea == 0)
+                return 0;
+
+            return intersectionArea / unionArea;
         }
-
-        private void PollRequestLabelIDs()
-        {
-            // Get the output 1 (labels ID data) from the model output using Sentis pull request.
-            m_pullLabelIDs = m_engine.PeekOutput(1) as Tensor<int>;
-            if (m_pullLabelIDs.dataOnBackend != null)
-            {
-                m_pullLabelIDs.ReadbackRequest();
-                m_isWaiting = true;
-            }
-            else
-            {
-                Debug.LogError("Sentis: No data output m_labelIDs");
-                m_download_state = 4;
-            }
-        }
-
-        private void GetInferencesResults()
-        {
-            // Get the different outputs in diferent frames to not block the main thread.
-            switch (m_download_state)
-            {
-                case 1:
-                    if (!m_isWaiting)
-                    {
-                        PollRequestOuput();
-                    }
-                    else
-                    {
-                        if (m_pullOutput.IsReadbackRequestDone())
-                        {
-                            m_output = m_pullOutput.ReadbackAndClone();
-                            m_isWaiting = false;
-
-                            if (m_output.shape[0] > 0)
-                            {
-                                Debug.Log("Sentis: m_output ready");
-                                m_download_state = 2;
-                            }
-                            else
-                            {
-                                Debug.Log("Sentis: m_output empty");
-                                m_download_state = 4;
-                            }
-                        }
-                    }
-                    break;
-                case 2:
-                    if (!m_isWaiting)
-                    {
-                        PollRequestLabelIDs();
-                    }
-                    else
-                    {
-                        if (m_pullLabelIDs.IsReadbackRequestDone())
-                        {
-                            m_labelIDs = m_pullLabelIDs.ReadbackAndClone();
-                            m_isWaiting = false;
-
-                            if (m_labelIDs.shape[0] > 0)
-                            {
-                                Debug.Log("Sentis: m_labelIDs ready");
-                                m_download_state = 3;
-                            }
-                            else
-                            {
-                                Debug.LogError("Sentis: m_labelIDs empty");
-                                m_download_state = 4;
-                            }
-                        }
-                    }
-                    break;
-                case 3:
-                    m_uiInference.DrawUIBoxes(m_output, m_labelIDs, m_inputSize.x, m_inputSize.y, m_imageCameraPose);
-                    m_download_state = 5;
-                    break;
-                case 4:
-                    m_uiInference.OnObjectDetectionError();
-                    m_download_state = 5;
-                    break;
-                case 5:
-                    m_download_state++;
-                    m_started = false;
-                    m_output?.Dispose();
-                    m_labelIDs?.Dispose();
-                    break;
-            }
-        }
-        #endregion
     }
 }

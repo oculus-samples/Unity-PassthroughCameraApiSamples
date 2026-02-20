@@ -19,7 +19,7 @@ For comprehensive guides, API reference, and tutorials, visit the official Meta 
 
 - **[Passthrough Camera API Overview](https://developers.meta.com/horizon/documentation/unity/unity-pca-overview)** - Introduction and key concepts
 - **[Getting Started Guide](https://developers.meta.com/horizon/documentation/unity/unity-pca-documentation)** - Setup, configuration, and usage instructions
-- **[Unity Sentis Integration](https://developers.meta.com/horizon/documentation/unity/unity-pca-sentis)** - Using ML/CV models with PCA
+- **[Unity Inference Engine Integration](https://developers.meta.com/horizon/documentation/unity/unity-pca-sentis)** - Using ML/CV models with PCA
 - **[Migration Guide](https://developers.meta.com/horizon/documentation/unity/unity-pca-migration-from-webcamtexture)** - Migrating from WebCamTexture
 
 ## Requirements
@@ -27,7 +27,7 @@ For comprehensive guides, API reference, and tutorials, visit the official Meta 
 - **Unity:** 6000.0.38f1 or newer
 - **Packages:**
   - [Meta MRUK](https://assetstore.unity.com/packages/tools/integration/meta-mr-utility-kit-272450) (v81 or higher)
-  - [Unity Sentis](https://unity.com/sentis) (v2.1.3 for MultiObjectDetection sample)
+  - [Unity Inference Engine](https://unity.com/sentis) (v2.2.1 for MultiObjectDetection sample)
 - **Hardware:** Quest 3 / Quest 3S with Horizon OS v74 or higher
 - **Permissions:** `horizonos.permission.HEADSET_CAMERA`
 - **Passthrough:** Must be enabled in your project
@@ -58,7 +58,7 @@ The project contains **five sample scenes** that demonstrate how to use the **Pa
 * **[`CameraViewer`](./Assets/PassthroughCameraApiSamples/CameraViewer)** - Displays a 2D canvas with camera feed
 * **[`CameraToWorld`](./Assets/PassthroughCameraApiSamples/CameraToWorld)** - Aligns RGB camera pose with Passthrough and transforms 2D coordinates to 3D world space rays
 * **[`BrightnessEstimation`](./Assets/PassthroughCameraApiSamples/BrightnessEstimation)** - Adapts the experience based on environment brightness
-* **[`MultiObjectDetection`](./Assets/PassthroughCameraApiSamples/MultiObjectDetection)** - Uses Unity Sentis for real-world object recognition
+* **[`MultiObjectDetection`](./Assets/PassthroughCameraApiSamples/MultiObjectDetection)** - Uses Unity Inference Engine for real-world object recognition
 * **[`ShaderSample`](./Assets/PassthroughCameraApiSamples/ShaderSample)** - Applies custom GPU effects to camera texture
 
 ### Additional Components
@@ -81,7 +81,7 @@ For detailed setup instructions, API reference, and usage examples, see the **[G
 For comprehensive information about using the Passthrough Camera API:
 
 - **Setup & Configuration** - [Getting Started Guide](https://developers.meta.com/horizon/documentation/unity/unity-pca-documentation)
-- **Unity Sentis Integration** - [ML/CV with PCA](https://developers.meta.com/horizon/documentation/unity/unity-pca-sentis)
+- **Unity Inference Engine Integration** - [ML/CV with PCA](https://developers.meta.com/horizon/documentation/unity/unity-pca-sentis)
 - **Troubleshooting** - See the troubleshooting section in the [Getting Started Guide](https://developers.meta.com/horizon/documentation/unity/unity-pca-documentation#troubleshooting)
 
 ## Report an Issue
