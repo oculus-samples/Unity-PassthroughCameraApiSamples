@@ -48,12 +48,15 @@ public class ImageStreamer : MonoBehaviour
     [SerializeField] private Text debugText;
     [SerializeField] private LayerMask environmentMask;
 
+    [SerializeField] private int targetWidth;
+    [SerializeField] private int targetHeight;
+
     [Header("Tuning Sensitivity")]
     public float sensitivity = 0.00001f;
 
     // One euro filter parameters
     private float minCutoffPosition = 0.70f;
-    private float betaPosition = 0.67f;
+    private float betaPosition = 10.0f;
 
     private float minCutoffRotation = 0.16f;
     private float betaRotation = 0.25f;
@@ -65,6 +68,11 @@ public class ImageStreamer : MonoBehaviour
 
     private Vector3 adjustmentOffset = new Vector3(0.0f, 0.0f, 0.0f);
     bool euroAdjustment = false;
+
+    public float targetFPS = 30f;
+    private float m_lastSendTime = 0f;
+    private Texture2D m_cpuTexture;
+    private RenderTexture m_smallDescriptor;
 
     public class CornerData
     {
@@ -103,7 +111,7 @@ public class ImageStreamer : MonoBehaviour
                 float cx = m_cameraAccess.Intrinsics.PrincipalPoint.x;
                 float cy = m_cameraAccess.Intrinsics.PrincipalPoint.y;
 
-                string intrinsicsMessage = $"{fx},{fy},{cx},{cy},{m_cameraAccess.CurrentResolution.x},{m_cameraAccess.CurrentResolution.y}";
+                string intrinsicsMessage = $"{fx},{fy},{cx},{cy},{targetWidth},{targetHeight}";
                 byte[] messageBytes = Encoding.UTF8.GetBytes(intrinsicsMessage);
 
                 stream.Write(messageBytes, 0, messageBytes.Length);
@@ -114,13 +122,6 @@ public class ImageStreamer : MonoBehaviour
             Debug.LogError("Failed to send message: " + e.Message);
         }
     }
-
-    public float targetFPS = 30f; // Send 15 images per second instead of 72/90
-    private float m_lastSendTime = 0f;
-    private Texture2D m_cpuTexture;
-    private RenderTexture m_smallDescriptor;
-    private int targetWidth = 1280;
-    private int targetHeight = 1280;
 
     private void Update()
     {

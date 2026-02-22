@@ -1132,7 +1132,9 @@ MonoBehaviour:
   environmentMask:
     serializedVersion: 2
     m_Bits: 63
-  sensitivity: 0.05
+  targetWidth: 640
+  targetHeight: 640
+  sensitivity: 0.1
   targetFPS: 30
 --- !u!1 &1143997135
 GameObject:
