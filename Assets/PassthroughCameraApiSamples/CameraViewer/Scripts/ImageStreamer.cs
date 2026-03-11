@@ -26,8 +26,6 @@ using Meta.XR.EnvironmentDepth;
 
 using PassthroughCameraSamples;
 using System.Collections.Generic;
-using UnityEngine.UI;
-
 public class ImageStreamer : MonoBehaviour
 {
     // Server connection parameters
