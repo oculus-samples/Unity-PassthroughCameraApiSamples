@@ -27,13 +27,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2073883201896451684}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.38268343, y: -0, z: -0, w: 0.92387956}
-  m_LocalPosition: {x: 4.0043063, y: 1.3376062, z: -8.841327}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.0004, y: 0.00040000008, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2073883202203575097}
-  m_LocalEulerAnglesHint: {x: 45, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!222 &2073883201896451681
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -59,6 +59,9 @@ MeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -96,10 +99,10 @@ TextMesh:
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
-  m_Anchor: 1
+  m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 400
+  m_FontSize: 250
   m_FontStyle: 0
   m_RichText: 1
   m_Font: {fileID: 0}
@@ -132,7 +135,7 @@ Transform:
   m_GameObject: {fileID: 2073883202203575103}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -4.0043063, y: -1.3477062, z: 8.787427}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -151,5 +154,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 770a4080c31aaf14894b494351c86cc6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ShowStartButtonTooltip: 1
-  m_tooltip: {fileID: 2073883201896451684}
+  _tooltipText: {fileID: 2073883201896451687}
+  _controllerTooltip: "Press \u2630 to go back \nto Samples Selection"
+  _handTooltip: "Press \u2630 to go back \nto Samples Selection"
+  _controllerOffset: {x: 0, y: 0, z: -0.07}
+  _controllerRotation: {x: 45, y: 0, z: 0}
+  _handOffset: {x: 0, y: 0, z: 0.04}
+  _handRotation: {x: 0, y: 180, z: 90}

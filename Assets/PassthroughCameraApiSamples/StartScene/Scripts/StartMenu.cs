@@ -8,6 +8,7 @@ using Meta.XR.Samples;
 using PassthroughCameraSamples.MultiObjectDetection;
 using Unity.InferenceEngine;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace PassthroughCameraSamples.StartScene
 {
@@ -80,11 +81,11 @@ namespace PassthroughCameraSamples.StartScene
             uiBuilder.Show();
         }
 
-        private void LoadScene(int idx)
+        private static void LoadScene(int idx)
         {
             DebugUIBuilder.Instance.Hide();
             Debug.Log("Load scene: " + idx);
-            UnityEngine.SceneManagement.SceneManager.LoadScene(idx);
+            SceneManager.LoadScene(idx);
         }
     }
 }

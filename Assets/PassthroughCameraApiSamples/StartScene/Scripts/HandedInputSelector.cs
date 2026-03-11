@@ -21,20 +21,8 @@ namespace PassthroughCameraSamples.StartScene
 
         private void Update()
         {
-            if (OVRInput.GetActiveController() == OVRInput.Controller.LTouch)
-            {
-                SetActiveController(OVRInput.Controller.LTouch);
-            }
-            else
-            {
-                SetActiveController(OVRInput.Controller.RTouch);
-            }
-        }
-
-        private void SetActiveController(OVRInput.Controller c)
-        {
-            var t = c == OVRInput.Controller.LTouch ? m_cameraRig.leftHandAnchor : m_cameraRig.rightHandAnchor;
-            m_inputModule.rayTransform = t;
+            var rayTransform = OVRInput.GetActiveController() is OVRInput.Controller.LTouch or OVRInput.Controller.LHand ? m_cameraRig.leftHandAnchor : m_cameraRig.rightHandAnchor;
+            m_inputModule.rayTransform = rayTransform;
         }
     }
 }

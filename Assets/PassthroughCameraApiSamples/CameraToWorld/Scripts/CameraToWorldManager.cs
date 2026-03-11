@@ -60,7 +60,7 @@ namespace PassthroughCameraSamples.CameraToWorld
 
         private void Update()
         {
-            if (OVRInput.GetDown(OVRInput.Button.One))
+            if (InputManager.IsButtonADownOrPinchStarted())
             {
                 m_snapshotTaken = !m_snapshotTaken;
                 if (m_snapshotTaken)
@@ -80,7 +80,7 @@ namespace PassthroughCameraSamples.CameraToWorld
                 UpdateRaysRendering();
             }
 
-            if (OVRInput.GetDown(OVRInput.Button.Two))
+            if (InputManager.IsButtonBDownOrMiddleFingerPinchStarted())
             {
                 m_isDebugOn = !m_isDebugOn;
                 Debug.Log($"PCA: SpatialSnapshotManager: DEBUG mode is {(m_isDebugOn ? "ON" : "OFF")}");

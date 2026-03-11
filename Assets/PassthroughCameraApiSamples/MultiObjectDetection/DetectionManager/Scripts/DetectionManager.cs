@@ -14,9 +14,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
     {
         [SerializeField] private PassthroughCameraAccess m_cameraAccess;
 
-        [Header("Controls configuration")]
-        [SerializeField] private OVRInput.RawButton m_actionButton = OVRInput.RawButton.A;
-
         [Header("Placement configuration")]
         [SerializeField] private DetectionSpawnMarkerAnim m_spawnMarker;
         [SerializeField] private AudioSource m_placeSound;
@@ -60,14 +57,14 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             else
             {
                 // Press A button to spawn 3d markers
-                if (OVRInput.GetUp(m_actionButton))
+                if (InputManager.IsButtonADownOrPinchStarted())
                 {
                     SpawnCurrentDetectedObjects();
                 }
             }
 
             // Press B button to clean all markers
-            if (OVRInput.GetDown(OVRInput.RawButton.B))
+            if (InputManager.IsButtonBDownOrMiddleFingerPinchStarted())
             {
                 CleanMarkers();
             }
