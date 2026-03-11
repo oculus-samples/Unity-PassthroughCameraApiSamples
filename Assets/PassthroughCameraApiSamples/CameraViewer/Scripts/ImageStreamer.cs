@@ -14,6 +14,7 @@ using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Assertions;
+using UnityEngine.Rendering;
 
 // For passthrough camera
 using System.Runtime.InteropServices;
@@ -36,6 +37,7 @@ public class ImageStreamer : MonoBehaviour
     private TcpClient client;
     private NetworkStream stream;
     private Thread clientReceiveThread;
+    private Thread clientSendThread;
 
     private readonly Queue<CornerData> receivedDataQueue = new Queue<CornerData>(); // Buffer for incoming data
 
@@ -73,6 +75,11 @@ public class ImageStreamer : MonoBehaviour
     private float m_lastSendTime = 0f;
     private Texture2D m_cpuTexture;
     private RenderTexture m_smallDescriptor;
+
+    // Image sending
+    private bool asyncReadbackInProgress = false;
+    private byte[] sendFrame = null;
+    private readonly object bufferLock = new object();
 
     public class CornerData
     {
@@ -133,7 +140,7 @@ public class ImageStreamer : MonoBehaviour
             // 1. Initialize the small GPU buffer (RenderTexture)
             if (m_smallDescriptor == null)
             {
-                m_smallDescriptor = new RenderTexture(targetWidth, targetHeight, 0);
+                m_smallDescriptor = new RenderTexture(targetWidth, targetHeight, 0, RenderTextureFormat.R8);
             }
 
             // 2. Initialize the CPU buffer (Texture2D) to match the small size
@@ -146,21 +153,78 @@ public class ImageStreamer : MonoBehaviour
             // This takes the 1280x1280 and shrinks it to 640x640 instantly
             Graphics.Blit(rawTexture, m_smallDescriptor);
 
-            // 4. Download the SMALLER image to the CPU
-            RenderTexture currentRT = RenderTexture.active;
-            RenderTexture.active = m_smallDescriptor;
+            if (!asyncReadbackInProgress)
+            {
+                asyncReadbackInProgress = true;
 
-            m_cpuTexture.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
-            m_cpuTexture.Apply();
-
-            RenderTexture.active = currentRT;
-
-            // 5. Encode the much smaller dataset
-            byte[] byteData = m_cpuTexture.EncodeToJPG(90);
-            SendMessageToServer(byteData);
+                AsyncGPUReadback.Request(m_smallDescriptor, 0, TextureFormat.R8, OnCompleteReadback);
+            }
         }
 
         HandleControllerTuning();
+    }
+
+    private void OnCompleteReadback(AsyncGPUReadbackRequest request)
+    {
+        asyncReadbackInProgress = false;
+
+        if (request.hasError)
+        {
+            Debug.LogError("GPU readback error detected.");
+            return;
+        }
+
+        // Get the data from the GPU
+        var data = request.GetData<byte>();
+
+        //byte[] jpgBytes = ImageConversion.EncodeNativeArrayToJPG(data, m_smallDescriptor.graphicsFormat, (uint)targetWidth, (uint)targetHeight, 0, 60).ToArray();
+        byte[] rawBytes = data.ToArray();
+
+        lock (bufferLock)
+        {
+            //sendFrame = jpgBytes;
+            sendFrame = rawBytes;
+        }
+    }
+
+    private void NetworkSenderLoop()
+    {
+        while (client != null && client.Connected)
+        {
+            byte[] dataToDraw = null;
+
+            // 1. Grab the latest frame if it exists
+            lock (bufferLock)
+            {
+                dataToDraw = sendFrame;
+                sendFrame = null; // Clear it so we don't send the same frame twice
+            }
+
+            // 2. If we have a fresh frame, send it
+            if (dataToDraw != null)
+            {
+                try
+                {
+                    int dataLength = dataToDraw.Length;
+                    byte[] lengthPrefix = BitConverter.GetBytes(dataLength);
+                    if (BitConverter.IsLittleEndian) Array.Reverse(lengthPrefix);
+
+                    stream.Write(lengthPrefix, 0, lengthPrefix.Length);
+                    stream.Write(dataToDraw, 0, dataLength);
+                    stream.Flush(); // Ensure it leaves the buffer immediately
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("Send Error: " + e.Message);
+                    break;
+                }
+            }
+            else
+            {
+                // 3. If no new frame, sleep for 1ms to save CPU
+                Thread.Sleep(1);
+            }
+        }
     }
 
     private void HandleControllerTuning()
@@ -240,6 +304,10 @@ public class ImageStreamer : MonoBehaviour
             clientReceiveThread = new Thread(new ThreadStart(ListenForData));
             clientReceiveThread.IsBackground = true;
             clientReceiveThread.Start();
+
+            clientSendThread = new Thread(new ThreadStart(NetworkSenderLoop));
+            clientSendThread.IsBackground = true;
+            clientSendThread.Start();
         }
         catch (SocketException e)
         {
@@ -254,6 +322,8 @@ public class ImageStreamer : MonoBehaviour
         if (client != null)
             client.Close();
         if (clientReceiveThread != null)
+            clientReceiveThread.Abort();
+        if (clientSendThread != null)
             clientReceiveThread.Abort();
     }
 
