@@ -131,15 +131,17 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             IEnumerator RestoreSpatialAnchorTracking()
             {
                 // Try to restore spatial anchor tracking. If restoration fails, erase it.
-                const int numRetries = 5;
+                LogSpatialAnchor("tracking was lost, restoring...");
+                const int numRetries = 20;
                 for (int i = 0; i < numRetries; i++)
                 {
+                    yield return new WaitForSeconds(1f);
                     if (!m_isHeadsetTracking)
                     {
-                        yield break;
+                        LogSpatialAnchor($"{nameof(m_isHeadsetTracking)} is false, retrying ({i})");
+                        continue;
                     }
 
-                    LogSpatialAnchor("tracking was lost, restoring...");
                     var unboundAnchors = new List<OVRSpatialAnchor.UnboundAnchor>(1);
                     var awaiter = OVRSpatialAnchor.LoadUnboundAnchorsAsync(new[]
                     {
@@ -152,27 +154,26 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                     var loadResult = awaiter.GetResult();
                     if (!loadResult.Success)
                     {
-                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() failed {loadResult.Status}", LogType.Error);
-                        EraseSpatialAnchor();
-                        yield break;
+                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() failed {loadResult.Status}, retrying ({i})", LogType.Error);
+                        continue;
                     }
                     if (unboundAnchors.Count != 0)
                     {
-                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() unexpected count:{unboundAnchors.Count}", LogType.Error);
-                        EraseSpatialAnchor();
-                        yield break;
+                        LogSpatialAnchor($"LoadUnboundAnchorsAsync() unexpected count:{unboundAnchors.Count}, retrying ({i})", LogType.Error);
+                        continue;
                     }
                     yield return null;
-                    if (m_spatialAnchor.IsTracked)
+                    if (!m_spatialAnchor.IsTracked)
                     {
-                        LogSpatialAnchor("tracking was restored successfully");
-                        yield break;
+                        LogSpatialAnchor($"tracking is not restored, retrying ({i})");
+                        continue;
                     }
 
-                    yield return new WaitForSeconds(1f);
+                    LogSpatialAnchor("tracking was restored successfully");
+                    yield break;
                 }
 
-                LogSpatialAnchor("tracking restoration failed", LogType.Warning);
+                LogSpatialAnchor($"tracking restoration failed after {numRetries} retries", LogType.Warning);
                 EraseSpatialAnchor();
             }
         }
