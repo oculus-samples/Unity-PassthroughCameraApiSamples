@@ -1,28 +1,26 @@
-﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" android:installLocation="auto" xmlns:horizonos="http://schemas.horizonos/sdk">
   <application android:label="@string/app_name" android:icon="@mipmap/app_icon" android:allowBackup="false">
-    <activity android:theme="@style/BaseUnityGameActivityTheme" android:configChanges="locale|fontScale|keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode" android:launchMode="singleTask" android:name="com.unity3d.player.appui.AppUIGameActivity" android:excludeFromRecents="true" android:exported="true">
+    <activity android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" android:configChanges="locale|fontScale|keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode" android:launchMode="singleTask" android:name="com.unity3d.player.UnityPlayerGameActivity" android:excludeFromRecents="true" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
         <category android:name="com.oculus.intent.category.VR" />
       </intent-filter>
       <meta-data android:name="com.oculus.vr.focusaware" android:value="true" />
-      <meta-data android:name="android.app.lib_name" android:value="game" />
     </activity>
     <meta-data android:name="unityplayer.SkipPermissionsDialog" android:value="false" />
+    <meta-data android:name="com.oculus.handtracking.frequency" android:value="LOW" />
     <meta-data android:name="com.oculus.ossplash.background" android:value="passthrough-contextual" />
     <meta-data android:name="com.oculus.telemetry.project_guid" android:value="d3b734c5-027a-4bf1-bcbc-9ef6111cb1bd" />
     <meta-data android:name="com.oculus.supportedDevices" android:value="quest3|quest3s" tools:replace="android:value" />
-    <meta-data android:name="com.oculus.handtracking.frequency" android:value="LOW" />
   </application>
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
+  <uses-feature android:name="oculus.software.handtracking" android:required="false" />
+  <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
   <uses-permission android:name="com.oculus.permission.USE_ANCHOR_API" />
   <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="true" />
   <uses-permission android:name="com.oculus.permission.USE_SCENE" />
-  <uses-permission android:name="horizonos.permission.HEADSET_CAMERA" />
-  <uses-permission android:name="android.permission.VIBRATE" />
-  <uses-feature android:name="oculus.software.handtracking" android:required="false" />
-  <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
   <horizonos:uses-horizonos-sdk horizonos:minSdkVersion="68" horizonos:targetSdkVersion="74" />
+  <uses-permission android:name="horizonos.permission.HEADSET_CAMERA" />
 </manifest>
