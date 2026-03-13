@@ -16,7 +16,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
 
         [Header("Placement configuration")]
         [SerializeField] private DetectionSpawnMarkerAnim m_spawnMarker;
-        [SerializeField] private AudioSource m_placeSound;
 
         [SerializeField] private SentisInferenceUiManager m_uiInference;
         [Space(10)]
@@ -220,11 +219,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                     m_spawnedEntities.Add(marker);
                     newCount++;
                 }
-            }
-            if (newCount > 0)
-            {
-                // Play sound if a new marker is placed.
-                m_placeSound.Play();
             }
             OnObjectsIdentified?.Invoke(newCount);
 

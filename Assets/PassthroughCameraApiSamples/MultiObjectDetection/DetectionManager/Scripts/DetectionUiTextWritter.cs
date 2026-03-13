@@ -13,7 +13,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [SerializeField] private Text m_labelInfo;
         [SerializeField] private float m_writtingSpeed = 0.00015f;
         [SerializeField] private float m_writtingInfoPause = 0.005f;
-        [SerializeField] private AudioSource m_writtingSound;
 
         public UnityEvent OnStartWritting;
         public UnityEvent OnFinishWritting;
@@ -48,8 +47,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                 if (m_writtingTime <= 0)
                 {
                     m_writtingTime = m_writtingSpeed;
-
-                    m_writtingSound?.Play();
 
                     var nextChar = m_currentInfo.Substring(m_currentInfoIndex, 1);
                     m_labelInfo.text += nextChar;

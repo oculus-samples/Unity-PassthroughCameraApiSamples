@@ -16,7 +16,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [SerializeField] private GameObject m_initialPanel;
         [SerializeField] private GameObject m_noPermissionPanel;
         [SerializeField] private Text m_labelInformation;
-        [SerializeField] private AudioSource m_buttonSound;
 
         public bool IsInputActive { get; set; } = false;
 
@@ -83,7 +82,6 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         {
             if (InputManager.IsButtonADownOrPinchStarted())
             {
-                m_buttonSound?.Play();
                 OnPauseMenu(false);
             }
         }
