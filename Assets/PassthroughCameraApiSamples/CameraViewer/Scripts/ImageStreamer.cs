@@ -75,6 +75,8 @@ public class ImageStreamer : MonoBehaviour
     private RenderTexture m_smallDescriptor;
 
     // Image sending
+    private DateTime startTime;
+    private ulong timestamp = 0;
     private bool asyncReadbackInProgress = false;
     private byte[] sendFrame = null;
     private readonly object bufferLock = new object();
@@ -99,6 +101,7 @@ public class ImageStreamer : MonoBehaviour
         }
         // Set texture to the RawImage Ui element
         m_image.texture = m_cameraAccess.GetTexture();
+        startTime = m_cameraAccess.Timestamp;
 
         // Setup One Euro Filter
         positionFilter = new OneEuroVector3(minCutoffPosition, betaPosition);
@@ -154,7 +157,6 @@ public class ImageStreamer : MonoBehaviour
             if (!asyncReadbackInProgress)
             {
                 asyncReadbackInProgress = true;
-
                 AsyncGPUReadback.Request(m_smallDescriptor, 0, TextureFormat.R8, OnCompleteReadback);
             }
         }
@@ -203,11 +205,16 @@ public class ImageStreamer : MonoBehaviour
             {
                 try
                 {
+                    timestamp = (ulong)(m_cameraAccess.Timestamp - startTime).Ticks * 100; // Convert to nanoseconds
+                    
                     int dataLength = dataToDraw.Length;
                     byte[] lengthPrefix = BitConverter.GetBytes(dataLength);
+                    byte[] timestampBytes = BitConverter.GetBytes(timestamp);
                     if (BitConverter.IsLittleEndian) Array.Reverse(lengthPrefix);
+                    if (BitConverter.IsLittleEndian) Array.Reverse(timestampBytes);
 
-                    stream.Write(lengthPrefix, 0, lengthPrefix.Length);
+                    stream.Write(lengthPrefix, 0, lengthPrefix.Length); // 4 bytes
+                    stream.Write(timestampBytes, 0, timestampBytes.Length); // 8 bytes
                     stream.Write(dataToDraw, 0, dataLength);
                     stream.Flush(); // Ensure it leaves the buffer immediately
                 }
