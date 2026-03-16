@@ -364,9 +364,11 @@ public class ImageStreamer : MonoBehaviour
             Vector3 worldPos = m_cameraAccess.GetCameraPose().position + (m_cameraAccess.GetCameraPose().rotation * (localPos + adjustmentOffset));
             Quaternion worldRot = camTrans.rotation * localRot;
 
-            // 3. Filter and Apply
-            InteractiveCube.transform.position = positionFilter.Filter(worldPos, Time.time);
-            InteractiveCube.transform.rotation = rotationFilter.Filter(worldRot, Time.time);
+            // // 3. Filter and Apply
+            // InteractiveCube.transform.position = positionFilter.Filter(worldPos, Time.time);
+            // InteractiveCube.transform.rotation = rotationFilter.Filter(worldRot, Time.time);
+            InteractiveCube.transform.position = worldPos;
+            InteractiveCube.transform.rotation = worldRot;
         }
     }
 
