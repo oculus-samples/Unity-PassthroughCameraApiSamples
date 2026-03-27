@@ -51,6 +51,9 @@ public class ImageStreamer : MonoBehaviour
     [SerializeField] private int targetWidth;
     [SerializeField] private int targetHeight;
 
+    [SerializeField] public Material secureMaterial;
+    [SerializeField] public Material defaultMaterial;
+
     [Header("Tuning Sensitivity")]
     public float sensitivity = 0.00001f;
 
@@ -87,6 +90,7 @@ public class ImageStreamer : MonoBehaviour
 
         public float[] tvec;
         public float[] rvec;
+        public bool grasped;
     }
 
     private IEnumerator Start()
@@ -358,6 +362,8 @@ public class ImageStreamer : MonoBehaviour
             Vector3 axis = rotAxis.normalized;
             Quaternion localRot = Quaternion.AngleAxis(-angle * Mathf.Rad2Deg, new Vector3(axis.x, -axis.y, axis.z));
 
+            bool isSecure = dataToProcess.grasped;
+
             // 2. Transform relative to Camera
             Transform camTrans = leftEyeCamera;
 
@@ -367,6 +373,8 @@ public class ImageStreamer : MonoBehaviour
             // 3. Filter and Apply
             InteractiveCube.transform.position = positionFilter.Filter(worldPos, Time.time);
             InteractiveCube.transform.rotation = rotationFilter.Filter(worldRot, Time.time);
+
+            InteractiveCube.GetComponent<Renderer>().material = isSecure ? secureMaterial : defaultMaterial;
         }
     }
 
