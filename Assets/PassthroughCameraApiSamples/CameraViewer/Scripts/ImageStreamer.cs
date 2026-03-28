@@ -79,10 +79,14 @@ public class ImageStreamer : MonoBehaviour
 
     // Image sending
     private DateTime startTime;
-    private ulong timestamp = 0;
+    private ulong timestamp = 0; // Timestamp of frame being processed
+    private ulong sendTimestamp = 0; // Timestamp of image being sent
     private bool asyncReadbackInProgress = false;
     private byte[] sendFrame = null;
     private readonly object bufferLock = new object();
+
+    // Pose history
+    public PoseHistory prevPose = new PoseHistory(10);
 
     public class CornerData
     {
@@ -90,7 +94,9 @@ public class ImageStreamer : MonoBehaviour
 
         public float[] tvec;
         public float[] rvec;
+
         public bool grasped;
+        public ulong timestamp;
     }
 
     private IEnumerator Start()
@@ -142,6 +148,9 @@ public class ImageStreamer : MonoBehaviour
             Texture rawTexture = m_cameraAccess.GetTexture();
             if (rawTexture == null) return;
 
+            timestamp = (ulong)(m_cameraAccess.Timestamp - startTime).Ticks * 100; // Convert to nanoseconds
+            Pose capturePose = m_cameraAccess.GetCameraPose();
+
             // 1. Initialize the small GPU buffer (RenderTexture)
             if (m_smallDescriptor == null)
             {
@@ -161,14 +170,16 @@ public class ImageStreamer : MonoBehaviour
             if (!asyncReadbackInProgress)
             {
                 asyncReadbackInProgress = true;
-                AsyncGPUReadback.Request(m_smallDescriptor, 0, TextureFormat.R8, OnCompleteReadback);
+                AsyncGPUReadback.Request(m_smallDescriptor, 0, TextureFormat.R8, (request) => {
+                    OnCompleteReadback(request, timestamp, capturePose);
+                });
             }
         }
 
         HandleControllerTuning();
     }
 
-    private void OnCompleteReadback(AsyncGPUReadbackRequest request)
+    private void OnCompleteReadback(AsyncGPUReadbackRequest request, ulong timestamp, Pose capturePose)
     {
         asyncReadbackInProgress = false;
 
@@ -188,6 +199,8 @@ public class ImageStreamer : MonoBehaviour
         {
             //sendFrame = jpgBytes;
             sendFrame = rawBytes;
+            sendTimestamp = timestamp;
+            prevPose.addPose(timestamp, capturePose.position, capturePose.rotation);
         }
     }
 
@@ -209,11 +222,9 @@ public class ImageStreamer : MonoBehaviour
             {
                 try
                 {
-                    timestamp = (ulong)(m_cameraAccess.Timestamp - startTime).Ticks * 100; // Convert to nanoseconds
-                    
                     int dataLength = dataToDraw.Length;
                     byte[] lengthPrefix = BitConverter.GetBytes(dataLength);
-                    byte[] timestampBytes = BitConverter.GetBytes(timestamp);
+                    byte[] timestampBytes = BitConverter.GetBytes(sendTimestamp);
                     if (BitConverter.IsLittleEndian) Array.Reverse(lengthPrefix);
                     if (BitConverter.IsLittleEndian) Array.Reverse(timestampBytes);
 
@@ -333,7 +344,7 @@ public class ImageStreamer : MonoBehaviour
         if (clientReceiveThread != null)
             clientReceiveThread.Abort();
         if (clientSendThread != null)
-            clientReceiveThread.Abort();
+            clientSendThread.Abort();
     }
 
     private void LateUpdate()
@@ -365,10 +376,15 @@ public class ImageStreamer : MonoBehaviour
             bool isSecure = dataToProcess.grasped;
 
             // 2. Transform relative to Camera
-            Transform camTrans = leftEyeCamera;
+            TimestampPose cameraPose = prevPose.searchHistory(dataToProcess.timestamp);
+            if (cameraPose == null)
+            {
+                Debug.LogWarning("No camera pose found for timestamp: " + dataToProcess.timestamp);
+                cameraPose = new TimestampPose { position = m_cameraAccess.GetCameraPose().position, rotation = m_cameraAccess.GetCameraPose().rotation };
+            }
 
-            Vector3 worldPos = m_cameraAccess.GetCameraPose().position + (m_cameraAccess.GetCameraPose().rotation * (localPos + adjustmentOffset));
-            Quaternion worldRot = camTrans.rotation * localRot;
+            Vector3 worldPos = cameraPose.position + (cameraPose.rotation * (localPos + adjustmentOffset));
+            Quaternion worldRot = cameraPose.rotation * localRot;
 
             // 3. Filter and Apply
             InteractiveCube.transform.position = positionFilter.Filter(worldPos, Time.time);
@@ -438,6 +454,8 @@ public class ImageStreamer : MonoBehaviour
                                 // 4. Enqueue the data for the main thread to handle (THREAD-SAFE)
                                 lock (receivedDataQueue)
                                 {
+                                    while (receivedDataQueue.Count > 1)
+                                        receivedDataQueue.Dequeue(); // discard stale, keep only freshest
                                     receivedDataQueue.Enqueue(tag);
                                 }
                             }
