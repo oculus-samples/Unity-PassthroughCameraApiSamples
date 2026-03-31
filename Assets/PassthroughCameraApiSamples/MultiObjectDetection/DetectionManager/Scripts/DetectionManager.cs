@@ -190,6 +190,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
 
         private void CleanMarkers()
         {
+            LogSpatialAnchor("CleanMarkers");
             foreach (var e in m_spawnedEntities)
             {
                 Destroy(e.gameObject);
@@ -213,6 +214,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             {
                 if (!HasExistingMarkerInBoundingBox(box))
                 {
+                    LogSpatialAnchor($"spawn marker {box.ClassName}");
                     var marker = Instantiate(m_spawnMarker, box.BoxRectTransform.position, box.BoxRectTransform.rotation, m_uiInference.ContentParent);
                     marker.GetComponent<DetectionSpawnMarkerAnim>().SetYoloClassName(box.ClassName);
 
