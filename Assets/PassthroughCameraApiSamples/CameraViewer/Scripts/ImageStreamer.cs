@@ -81,6 +81,7 @@ public class ImageStreamer : MonoBehaviour
     private DateTime startTime;
     private ulong timestamp = 0; // Timestamp of frame being processed
     private ulong sendTimestamp = 0; // Timestamp of image being sent
+    private Pose sendCameraPose; // Camera pose at the time of capture to send alongside image
     private bool asyncReadbackInProgress = false;
     private byte[] sendFrame = null;
     private readonly object bufferLock = new object();
@@ -200,8 +201,16 @@ public class ImageStreamer : MonoBehaviour
             //sendFrame = jpgBytes;
             sendFrame = rawBytes;
             sendTimestamp = timestamp;
+            sendCameraPose = capturePose;
             prevPose.addPose(timestamp, capturePose.position, capturePose.rotation);
         }
+    }
+
+    byte[] GetBigEndianBytes(float value)
+    {
+        byte[] bytes = BitConverter.GetBytes(value);
+        if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
+        return bytes;
     }
 
     private void NetworkSenderLoop()
@@ -225,11 +234,27 @@ public class ImageStreamer : MonoBehaviour
                     int dataLength = dataToDraw.Length;
                     byte[] lengthPrefix = BitConverter.GetBytes(dataLength);
                     byte[] timestampBytes = BitConverter.GetBytes(sendTimestamp);
+                    byte[] posBytes = new byte[12]; // 3 floats * 4 bytes * 2 (pos + some rot)
+                    byte[] rotBytes = new byte[16]; // 4 floats for quaternion
+
+                    // Pack position
+                    Buffer.BlockCopy(GetBigEndianBytes(sendCameraPose.position.x), 0, posBytes, 0, 4);
+                    Buffer.BlockCopy(GetBigEndianBytes(sendCameraPose.position.y), 0, posBytes, 4, 4);
+                    Buffer.BlockCopy(GetBigEndianBytes(sendCameraPose.position.z), 0, posBytes, 8, 4);
+
+                    // Pack rotation (quaternion)
+                    Buffer.BlockCopy(GetBigEndianBytes(sendCameraPose.rotation.w), 0, rotBytes, 0, 4);
+                    Buffer.BlockCopy(GetBigEndianBytes(sendCameraPose.rotation.x), 0, rotBytes, 4, 4);
+                    Buffer.BlockCopy(GetBigEndianBytes(sendCameraPose.rotation.y), 0, rotBytes, 8, 4);
+                    Buffer.BlockCopy(GetBigEndianBytes(sendCameraPose.rotation.z), 0, rotBytes, 12, 4);
+
                     if (BitConverter.IsLittleEndian) Array.Reverse(lengthPrefix);
                     if (BitConverter.IsLittleEndian) Array.Reverse(timestampBytes);
 
-                    stream.Write(lengthPrefix, 0, lengthPrefix.Length); // 4 bytes
-                    stream.Write(timestampBytes, 0, timestampBytes.Length); // 8 bytes
+                    stream.Write(lengthPrefix, 0, 4); // 4 bytes
+                    stream.Write(timestampBytes, 0, 8); // 8 bytes
+                    stream.Write(posBytes, 0, 12); // 12 bytes
+                    stream.Write(rotBytes, 0, 16); // 16 bytes
                     stream.Write(dataToDraw, 0, dataLength);
                     stream.Flush(); // Ensure it leaves the buffer immediately
                 }
@@ -366,32 +391,18 @@ public class ImageStreamer : MonoBehaviour
             Debug.Log("Server message received: " + JsonConvert.SerializeObject(dataToProcess));
 
             // 1. Convert OpenCV (RHS) to Unity (LHS)
-            Vector3 localPos = new Vector3(dataToProcess.tvec[0], -dataToProcess.tvec[1], dataToProcess.tvec[2]);
+            Vector3 worldPos = new Vector3(dataToProcess.tvec[0], -dataToProcess.tvec[1], dataToProcess.tvec[2]);
 
             Vector3 rotAxis = new Vector3(dataToProcess.rvec[0], dataToProcess.rvec[1], dataToProcess.rvec[2]);
             float angle = rotAxis.magnitude;
             Vector3 axis = rotAxis.normalized;
-            Quaternion localRot = Quaternion.AngleAxis(-angle * Mathf.Rad2Deg, new Vector3(axis.x, -axis.y, axis.z));
+            Quaternion worldRot = Quaternion.AngleAxis(-angle * Mathf.Rad2Deg, new Vector3(axis.x, -axis.y, axis.z));
 
             bool isSecure = dataToProcess.grasped;
 
-            // 2. Transform relative to Camera
-            TimestampPose cameraPose = prevPose.searchHistory(dataToProcess.timestamp);
-            if (cameraPose == null)
-            {
-                Debug.LogWarning("No camera pose found for timestamp: " + dataToProcess.timestamp);
-                cameraPose = new TimestampPose { position = m_cameraAccess.GetCameraPose().position, rotation = m_cameraAccess.GetCameraPose().rotation };
-            }
-
-            Vector3 worldPos = cameraPose.position + (cameraPose.rotation * (localPos + adjustmentOffset));
-            Quaternion worldRot = cameraPose.rotation * localRot;
-
-            // // 3. Filter and Apply
-            // InteractiveCube.transform.position = positionFilter.Filter(worldPos, Time.time);
-            // InteractiveCube.transform.rotation = rotationFilter.Filter(worldRot, Time.time);
             InteractiveCube.transform.position = worldPos;
             InteractiveCube.transform.rotation = worldRot;
-            
+
             InteractiveCube.GetComponent<Renderer>().material = isSecure ? secureMaterial : defaultMaterial;
         }
     }

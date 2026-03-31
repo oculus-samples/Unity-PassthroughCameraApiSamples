@@ -1518,8 +1518,8 @@ MonoBehaviour:
   environmentMask:
     serializedVersion: 2
     m_Bits: 63
-  targetWidth: 640
-  targetHeight: 640
+  targetWidth: 1280
+  targetHeight: 1280
   secureMaterial: {fileID: 2100000, guid: eba957e988718ab4c85bee62c133feaf, type: 2}
   defaultMaterial: {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
   sensitivity: 0.1
