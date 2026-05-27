@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "hzdb": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@meta-quest/hzdb", "mcp", "server"]
+    }
+  }
+}
