@@ -3,6 +3,7 @@
     "com.meta.xr.mrutilitykit": "85.0.0",
     "com.unity.feature.development": "1.0.2",
     "com.unity.mobile.android-logcat": "1.4.6",
+    "com.unity.nuget.newtonsoft-json": "3.2.2",
     "com.unity.ai.inference": "2.2.1",
     "com.unity.ugui": "2.0.0",
     "com.unity.xr.management": "4.5.3",

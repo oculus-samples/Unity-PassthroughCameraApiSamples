@@ -19,3 +19,7 @@ PerformanceTestRun*.*
 StreamingAssets*
 buildInfo.txt
 Packages/packages-lock.json
+
+# Local OpenAI development credentials (included in local builds, never commit).
+Assets/Resources/OpenAI.local.json
+Assets/Resources/OpenAI.local.json.meta

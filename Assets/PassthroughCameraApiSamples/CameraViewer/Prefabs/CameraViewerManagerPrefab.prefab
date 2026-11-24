@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 4300654821384096248}
   - component: {fileID: 4920789567304922927}
   - component: {fileID: 3196867086813413058}
+  - component: {fileID: 8721000000000000001}
   m_Layer: 5
   m_Name: CameraViewerManagerPrefab
   m_TagString: Untagged
@@ -74,8 +75,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
@@ -97,8 +98,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_IgnoreReversedGraphics: 1
   m_BlockingObjects: 0
   m_BlockingMask:
@@ -114,11 +115,25 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c8bf844e5c0cc42f1bac2aae9e5944f3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_webCamTextureManager: {fileID: 0}
+  m_Name:
+  m_EditorClassIdentifier:
+  m_cameraAccess: {fileID: 0}
   m_debugText: {fileID: 7564955763330587025}
   m_image: {fileID: 875260709271607064}
+  m_detector: {fileID: 8721000000000000001}
+  m_model: gpt-4.1-mini
+  m_resultLanguage: English
+  m_resultFont: {fileID: 0}
+  m_maxImageDimension: 1024
+  m_jpegQuality: 80
+  m_requestTimeoutSeconds: 60
+  m_saveCaptureRecords: 1
+  m_salienceWeight: 1
+  m_expectancyWeight: 1
+  m_valueWeight: 1
+  m_onRecognitionJson:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &8159650142299280644
 GameObject:
   m_ObjectHideFlags: 0
@@ -174,8 +189,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
@@ -246,8 +261,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
@@ -270,3 +285,24 @@ MonoBehaviour:
     m_VerticalOverflow: 0
     m_LineSpacing: 1
   m_Text: ...
+--- !u!114 &8721000000000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5325651034816108330}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95ccdfb30907496baf4c624d8d7b2f70, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  m_sentisModel: {fileID: 5022602860645237092, guid: 69ab50aef18ae412cac4b305492d527c, type: 3}
+  m_labelsAsset: {fileID: 4900000, guid: c01c64149c7930b45a76559caabd5c78, type: 3}
+  m_backend: 256
+  m_confidenceThreshold: 0.3
+  m_iouThreshold: 0.4
+  m_detectionInterval: 0.2
+  m_maxFrameAge: 1.5
+  m_maxDepthDelay: 1
+  m_scoreLifetime: 30

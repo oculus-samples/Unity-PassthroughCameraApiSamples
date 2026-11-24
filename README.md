@@ -55,7 +55,7 @@ The project contains **five sample scenes** that demonstrate how to use the **Pa
 
 ### Samples
 
-* **[`CameraViewer`](./Assets/PassthroughCameraApiSamples/CameraViewer)** - Displays a 2D canvas with camera feed
+* **[`CameraViewer`](./Assets/PassthroughCameraApiSamples/CameraViewer)** - Detects object instances with IDs and estimated 3D positions, sends a matched screenshot and metadata to OpenAI for cooking-task attention scores, and highlights only the highest-scoring instance. See the [recognition setup and controls](./Assets/PassthroughCameraApiSamples/CameraViewer/README.md).
 * **[`CameraToWorld`](./Assets/PassthroughCameraApiSamples/CameraToWorld)** - Aligns RGB camera pose with Passthrough and transforms 2D coordinates to 3D world space rays
 * **[`BrightnessEstimation`](./Assets/PassthroughCameraApiSamples/BrightnessEstimation)** - Adapts the experience based on environment brightness
 * **[`MultiObjectDetection`](./Assets/PassthroughCameraApiSamples/MultiObjectDetection)** - Uses Unity Inference Engine for real-world object recognition
